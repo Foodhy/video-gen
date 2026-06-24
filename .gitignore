@@ -3,6 +3,7 @@ dist/
 workspace/
 models/
 .venv/
+.tmp-test/
 *.log
 .DS_Store
 

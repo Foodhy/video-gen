@@ -43,6 +43,11 @@ bun install
 bun run dev          # Vite UI :5173 + API :8787 (proxied) → open :5173
 ```
 
+### Tests
+```
+bun test          # unit (editor helpers/store) + ffmpeg render integration
+```
+
 ### Manual single-port
 ```
 bun run build
