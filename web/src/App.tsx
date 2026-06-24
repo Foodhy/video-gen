@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { useEditor, serializeDoc, buildSnapPoints, type Asset, type Caption } from "./state/editor.ts";
+import {
+  useEditor,
+  serializeDoc,
+  buildSnapPoints,
+  timelineDuration,
+  type Asset,
+  type Caption,
+} from "./state/editor.ts";
 import { loadProject, saveDoc } from "./lib/api.ts";
 import Toolbar from "./components/Toolbar.tsx";
 import MediaPanel from "./components/MediaPanel.tsx";
@@ -112,6 +119,13 @@ export default function App() {
         splitAtPlayhead();
       } else if (e.key === "Backspace" || e.key === "Delete") {
         deleteSelected();
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        useEditor.getState().setPlayhead(0);
+      } else if (e.key === "End") {
+        e.preventDefault();
+        const st = useEditor.getState();
+        st.setPlayhead(timelineDuration(st.segments));
       } else if (e.key === "," || e.key === ".") {
         const st = useEditor.getState();
         const pts = buildSnapPoints(st.segments, st.texts);

@@ -253,7 +253,38 @@ export default function Player() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing]);
 
-  const hasContent = placed.length > 0;
+  // Clock-driven playback for timelines with no video track (audio/overlay only).
+  useEffect(() => {
+    if (!playing || placed.length > 0) return; // video-driven loop handles the rest
+    if (audioPlaced.length === 0 && overlayPlaced.length === 0) return;
+    let raf = 0;
+    let last = performance.now();
+    const step = () => {
+      const now = performance.now();
+      const t = useEditor.getState().playhead + (now - last) / 1000;
+      last = now;
+      if (t >= total) {
+        setPlaying(false);
+        setPlayhead(total);
+        return;
+      }
+      setPlayhead(t);
+      syncAudio(t, false);
+      syncOverlay(t, false);
+      const au = audioElRef.current;
+      if (au && locate(audioPlaced, t) && au.paused) au.play().catch(() => {});
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing]);
+
+  const hasVideo = placed.length > 0;
+  const hasContent = hasVideo || audioPlaced.length > 0 || overlayPlaced.length > 0;
+
+  // Transport helpers.
+  const seekTo = (t: number) => setPlayhead(Math.max(0, Math.min(t, total)));
 
   return (
     <section className="panel player">
@@ -265,7 +296,7 @@ export default function Player() {
         </span>
       </div>
       <div className="player-stage" ref={stageRef}>
-        {hasContent ? (
+        {hasVideo ? (
           <>
             <video ref={videoRef} playsInline style={{ filter: fxToCss(activeHit?.seg.fx) }} />
             <video
@@ -280,9 +311,7 @@ export default function Player() {
                 width: (activeOverlay?.seg.oscale ?? 0.4) * 100 + "%",
               }}
             />
-            {fade < 1 && (
-              <div className="fade-overlay" style={{ opacity: 1 - fade }} />
-            )}
+            {fade < 1 && <div className="fade-overlay" style={{ opacity: 1 - fade }} />}
             {visibleTexts.map((t) => (
               <div
                 key={t.id}
@@ -301,16 +330,24 @@ export default function Player() {
               </div>
             ))}
             {activeCap && <div className="subtitle">{activeCap.text}</div>}
-            {hasAudioTrack && <audio ref={audioElRef} style={{ display: "none" }} />}
           </>
         ) : (
           <div className="player-empty">
             <div className="big chrome">VIDEO—GEN</div>
-            <div className="sub label">Import media to begin</div>
+            <div className="sub label">
+              {hasContent ? "Audio-only timeline" : "Import media to begin"}
+            </div>
           </div>
         )}
+        {hasAudioTrack && <audio ref={audioElRef} style={{ display: "none" }} />}
       </div>
       <div className="player-bar">
+        <button className="transport" onClick={() => seekTo(0)} disabled={!hasContent} title="Go to start (Home)">
+          ⏮
+        </button>
+        <button className="transport" onClick={() => seekTo(playhead - 5)} disabled={!hasContent} title="Back 5s">
+          ⏪
+        </button>
         <button
           className="transport"
           onClick={() => setPlaying(!playing)}
@@ -318,6 +355,12 @@ export default function Player() {
           title="Play / Pause (space)"
         >
           {playing ? "❚❚" : "►"}
+        </button>
+        <button className="transport" onClick={() => seekTo(playhead + 5)} disabled={!hasContent} title="Forward 5s">
+          ⏩
+        </button>
+        <button className="transport" onClick={() => seekTo(total)} disabled={!hasContent} title="Go to end (End)">
+          ⏭
         </button>
         <span className="tc">
           <span className="cur">{tc(playhead)}</span> / {tc(total)}

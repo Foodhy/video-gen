@@ -1,5 +1,6 @@
 import { useEditor, timelineDuration } from "../state/editor.ts";
 import ProjectMenu from "./ProjectMenu.tsx";
+import { startTour } from "../lib/tour.ts";
 
 const TOOLS = [
   { id: "media", ic: "▦", label: "Media", on: true },
@@ -25,16 +26,20 @@ export default function Toolbar({ onExport }: { onExport: () => void }) {
   return (
     <header className="toolbar">
       <span className="brand">VIDEO—GEN</span>
-      <ProjectMenu />
+      <span data-tour="projects">
+        <ProjectMenu />
+      </span>
       <span style={{ width: 8 }} />
-      <button className="tool" onClick={undo} disabled={!canUndo} title="Undo (⌘Z)">
-        <span className="ic">↶</span>
-        Undo
-      </button>
-      <button className="tool" onClick={redo} disabled={!canRedo} title="Redo (⌘⇧Z)">
-        <span className="ic">↷</span>
-        Redo
-      </button>
+      <span data-tour="undo" style={{ display: "inline-flex" }}>
+        <button className="tool" onClick={undo} disabled={!canUndo} title="Undo (⌘Z)">
+          <span className="ic">↶</span>
+          Undo
+        </button>
+        <button className="tool" onClick={redo} disabled={!canRedo} title="Redo (⌘⇧Z)">
+          <span className="ic">↷</span>
+          Redo
+        </button>
+      </span>
       <span style={{ width: 14 }} />
       {TOOLS.map((t) => (
         <button
@@ -66,7 +71,12 @@ export default function Toolbar({ onExport }: { onExport: () => void }) {
         Captions
       </button>
       <span className="spacer" />
+      <button className="tool" onClick={startTour} title="Guided tour of the editor">
+        <span className="ic">?</span>
+        Guide
+      </button>
       <button
+        data-tour="logs"
         className={"tool" + (showLogs ? " active" : "")}
         onClick={toggleLogs}
         title="Show event/error console"
@@ -77,7 +87,7 @@ export default function Toolbar({ onExport }: { onExport: () => void }) {
         </span>
         Logs
       </button>
-      <button className="btn-cta" onClick={onExport} disabled={!hasVideo}>
+      <button data-tour="export" className="btn-cta" onClick={onExport} disabled={!hasVideo}>
         ⬇ Export
       </button>
     </header>
