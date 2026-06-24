@@ -110,7 +110,7 @@ export default function Player() {
     // When the A1 audio track covers this time, it provides the sound → mute base.
     const a1Here = !!locate(audioPlaced, t);
     v.muted = !!hit.seg.muted || a1Here;
-    v.volume = fadeFactor(hit.seg, t); // audio fade in/out
+    v.volume = Math.min(1, fadeFactor(hit.seg, t) * (hit.seg.volume ?? 1)); // fade × gain (preview caps at 1)
     v.playbackRate = hit.seg.speed ?? 1;
     if (loadedClip.current !== asset.id) {
       loadedClip.current = asset.id;
@@ -173,7 +173,7 @@ export default function Player() {
     const asset = assets[hit.seg.clipId];
     if (!asset) return;
     a.playbackRate = hit.seg.speed ?? 1;
-    a.volume = fadeFactor(hit.seg, t) * (hit.seg.muted ? 0 : 1);
+    a.volume = Math.min(1, fadeFactor(hit.seg, t) * (hit.seg.muted ? 0 : hit.seg.volume ?? 1));
     if (loadedAudio.current !== asset.id) {
       loadedAudio.current = asset.id;
       a.src = asset.mediaUrl;

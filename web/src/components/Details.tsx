@@ -46,6 +46,7 @@ export default function Details() {
   const clearCaptions = useEditor((s) => s.clearCaptions);
   const setFade = useEditor((s) => s.setFade);
   const setSpeed = useEditor((s) => s.setSpeed);
+  const setVolume = useEditor((s) => s.setVolume);
   const setFx = useEditor((s) => s.setFx);
   const clearFx = useEditor((s) => s.clearFx);
   const applyFxPreset = useEditor((s) => s.applyFxPreset);
@@ -396,6 +397,23 @@ export default function Details() {
                   onChange={(e) => setSpeed(seg.id, Number(e.target.value))}
                   style={{ width: "100%" }}
                 />
+
+                <div style={{ height: 8 }} />
+                <span className="label">
+                  Volume — {Math.round((seg.volume ?? 1) * 100)}%{seg.muted ? " (muted)" : ""}
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={2}
+                  step={0.05}
+                  value={seg.volume ?? 1}
+                  onChange={(e) => setVolume(seg.id, Number(e.target.value))}
+                  style={{ width: "100%" }}
+                />
+                <span className="mono" style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                  0–200% (boost &gt;100% audible in export; preview caps at 100%)
+                </span>
 
                 <div style={{ height: 8 }} />
                 <span className="label">Transitions — fade (sec)</span>

@@ -75,6 +75,7 @@ export interface ExportEdlItem {
   in: number;
   out: number;
   speed?: number;
+  volume?: number;
   muted?: boolean;
   fadeIn?: number;
   fadeOut?: number;

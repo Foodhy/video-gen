@@ -115,6 +115,7 @@ export interface EdlSegment {
   in: number; // seconds
   out: number; // seconds
   speed?: number; // playback speed (1 = normal)
+  volume?: number; // gain multiplier (1 = normal)
   muted?: boolean; // silence this segment's audio
   fadeIn?: number; // seconds — video+audio fade in
   fadeOut?: number; // seconds — video+audio fade out
@@ -359,6 +360,7 @@ export async function render(
       vf.push(`fade=t=out:st=${Math.max(0, outDur - fo)}:d=${fo}`);
       af.push(`afade=t=out:st=${Math.max(0, outDur - fo)}:d=${fo}`);
     }
+    if (seg.volume !== undefined && seg.volume !== 1) af.push(`volume=${seg.volume}`); // gain
     if (seg.muted) af.push("volume=0"); // silence overrides audio fades
     if (vf.length) args.push("-vf", vf.join(","));
     if (af.length) args.push("-af", af.join(","));

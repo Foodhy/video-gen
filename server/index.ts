@@ -300,6 +300,7 @@ interface ExportBody {
     in: number;
     out: number;
     speed?: number;
+    volume?: number;
     muted?: boolean;
     fadeIn?: number;
     fadeOut?: number;
@@ -325,6 +326,7 @@ interface ExportBody {
     in: number;
     out: number;
     speed?: number;
+    volume?: number;
     muted?: boolean;
     fadeIn?: number;
     fadeOut?: number;
@@ -349,6 +351,7 @@ async function handleExport(req: Request): Promise<Response> {
       in: s.in,
       out: s.out,
       speed: s.speed,
+      volume: s.volume,
       muted: s.muted,
       fadeIn: s.fadeIn,
       fadeOut: s.fadeOut,
@@ -383,6 +386,7 @@ async function handleExport(req: Request): Promise<Response> {
       in: a.in,
       out: a.out,
       speed: a.speed,
+      volume: a.volume,
       muted: a.muted,
       fadeIn: a.fadeIn,
       fadeOut: a.fadeOut,

@@ -18,6 +18,7 @@ export interface Segment {
   out: number; // source seconds
   start?: number; // explicit timeline position (sec). If unset, stacked after previous.
   speed?: number; // playback speed (1 = normal, <1 slow-mo, >1 fast)
+  volume?: number; // gain multiplier (1 = normal, 0..2)
   muted?: boolean; // silence this segment's audio (preview + export)
   fadeIn?: number; // seconds — fade from black + audio fade-in at segment start
   fadeOut?: number; // seconds — fade to black + audio fade-out at segment end
@@ -148,6 +149,7 @@ interface EditorState {
   moveSegmentBefore: (id: string, beforeId: string | null) => void;
   setSegmentStart: (id: string, start: number) => void;
   setSpeed: (id: string, speed: number) => void;
+  setVolume: (id: string, volume: number) => void;
   sendToTrack: (id: string, track: TrackKind) => void;
   setOverlayTransform: (
     id: string,
@@ -775,6 +777,15 @@ export const useEditor = create<EditorState>((set, get) => ({
     set((s) => ({
       segments: s.segments.map((x) =>
         x.id === id ? { ...x, speed: Math.max(0.25, Math.min(4, speed)) } : x,
+      ),
+    }));
+  },
+
+  setVolume: (id, volume) => {
+    get().record();
+    set((s) => ({
+      segments: s.segments.map((x) =>
+        x.id === id ? { ...x, volume: Math.max(0, Math.min(2, volume)) } : x,
       ),
     }));
   },
