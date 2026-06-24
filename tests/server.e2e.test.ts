@@ -95,6 +95,50 @@ test("separate-audio then export still works (timeline not broken)", async () =>
   expect(job.status).toBe("done");
 }, 60000);
 
+async function meanVolume(file: string, ss: number, t: number): Promise<number> {
+  const p = Bun.spawn(
+    ["ffmpeg", "-hide_banner", "-ss", String(ss), "-t", String(t), "-i", file, "-af", "volumedetect", "-f", "null", "/dev/null"],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  const out = (await new Response(p.stderr).text()) + (await new Response(p.stdout).text());
+  await p.exited;
+  const m = out.match(/mean_volume:\s*(-?[\d.]+) dB/);
+  return m ? parseFloat(m[1]) : 0;
+}
+
+test("A1 audio track replaces video audio on export (muted A1 -> silent)", async () => {
+  const imp = await importClip();
+  const pid = imp.projectId;
+  const videoClip = imp.clip.id;
+  const sep = await (await fetch(BASE + "/api/separate-audio", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ projectId: pid, clipId: videoClip }),
+  })).json();
+  const audioClip = sep.clip.id;
+
+  // Export: video has a 440Hz tone, but the A1 track (muted) is authoritative.
+  const exp = await (await fetch(BASE + "/api/export", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      projectId: pid,
+      edl: [{ clipId: videoClip, in: 0, out: 3 }],
+      audioTrack: [{ clipId: audioClip, in: 0, out: 3, muted: true }],
+    }),
+  })).json();
+  let job: any;
+  for (let i = 0; i < 80; i++) {
+    job = await (await fetch(`${BASE}/api/job/${exp.jobId}`)).json();
+    if (job.status !== "running") break;
+    await Bun.sleep(200);
+  }
+  expect(job.status).toBe("done");
+  const local = join(DIR, "a1muted.mp4");
+  await Bun.write(local, await (await fetch(BASE + job.outputFile)).arrayBuffer());
+  expect(await meanVolume(local, 0, 3)).toBeLessThan(-60); // A1 muted -> silence wins
+}, 90000);
+
 test("extract section audio returns a downloadable file", async () => {
   const imp = await importClip();
   const r = await fetch(BASE + "/api/extract-audio", {

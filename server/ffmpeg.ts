@@ -293,6 +293,7 @@ export async function render(
   burnSubs?: BurnCaption[],
   texts?: BurnText[],
   overlays?: OverlayItem[],
+  audioTrack?: EdlSegment[], // A1 track — when present, becomes the output audio
 ): Promise<void> {
   await mkdir(tmpDir, { recursive: true });
   const totalDur = segments.reduce((s, seg) => s + Math.max(0, seg.out - seg.in), 0);
@@ -348,8 +349,11 @@ export async function render(
   );
   const hasOverlay = !!overlays?.length;
   const hasBurn = !!burnSubs?.length || !!texts?.length;
+  const replaceAudio = !!audioTrack?.length;
+  // The video pipeline writes here; if A1 replaces audio, that's a temp we mux later.
+  const videoTarget = replaceAudio ? join(tmpDir, "video_final.mp4") : outPath;
   const needFinal = hasOverlay || hasBurn;
-  const concatOut = needFinal ? join(tmpDir, "concat.mp4") : outPath;
+  const concatOut = needFinal ? join(tmpDir, "concat.mp4") : videoTarget;
 
   if (trans.some((t) => t > 0)) {
     // Build groups of indices connected by crossfades.
@@ -405,7 +409,7 @@ export async function render(
   // 3. Optional PiP overlay composite.
   let cur = concatOut;
   if (hasOverlay) {
-    const o = hasBurn ? join(tmpDir, "overlay.mp4") : outPath;
+    const o = hasBurn ? join(tmpDir, "overlay.mp4") : videoTarget;
     await compositeOverlays(cur, overlays!, o);
     cur = o;
   }
@@ -430,13 +434,55 @@ export async function render(
       "ffmpeg", "-y", "-i", cur,
       "-vf", vfParts.join(","),
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-      "-c:a", "copy", "-movflags", "+faststart", outPath,
+      "-c:a", "copy", "-movflags", "+faststart", videoTarget,
     ]);
     if (burn.code !== 0) throw new Error("render: burn pass failed: " + burn.stderr.slice(-400));
+  }
+
+  // 5. A1 audio track is authoritative: build it and mux as the output audio.
+  if (replaceAudio) {
+    const a1 = await buildAudioTrack(audioTrack!, tmpDir);
+    const mux = await run([
+      "ffmpeg", "-y", "-i", videoTarget, "-i", a1,
+      "-map", "0:v:0", "-map", "1:a:0",
+      "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+      "-movflags", "+faststart", "-shortest", outPath,
+    ]);
+    if (mux.code !== 0) throw new Error("render: audio mux failed: " + mux.stderr.slice(-400));
   }
   onProgress?.(1);
 
   await rm(tmpDir, { recursive: true, force: true });
+}
+
+// Concatenate an audio-track EDL into one m4a (segments laid end-to-end).
+async function buildAudioTrack(segs: EdlSegment[], tmpDir: string): Promise<string> {
+  const parts: string[] = [];
+  for (let i = 0; i < segs.length; i++) {
+    const s = segs[i];
+    const part = join(tmpDir, `a1_${String(i).padStart(3, "0")}.m4a`);
+    const dur = Math.max(0.01, s.out - s.in);
+    const af: string[] = [];
+    const fi = Math.min(s.fadeIn ?? 0, dur);
+    const fo = Math.min(s.fadeOut ?? 0, dur);
+    if (fi > 0) af.push(`afade=t=in:st=0:d=${fi}`);
+    if (fo > 0) af.push(`afade=t=out:st=${Math.max(0, dur - fo)}:d=${fo}`);
+    if (s.muted) af.push("volume=0");
+    const args = ["ffmpeg", "-y", "-ss", String(s.in), "-i", s.src, "-t", String(dur), "-vn"];
+    if (af.length) args.push("-af", af.join(","));
+    args.push("-c:a", "aac", "-b:a", "192k", part);
+    const { code, stderr } = await run(args);
+    if (code !== 0) throw new Error(`audio track segment ${i} failed: ` + stderr.slice(-200));
+    parts.push(part);
+  }
+  const listFile = join(tmpDir, "a1.txt");
+  await writeFile(listFile, parts.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n"));
+  const out = join(tmpDir, "a1.m4a");
+  const { code, stderr } = await run([
+    "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", out,
+  ]);
+  if (code !== 0) throw new Error("audio track concat failed: " + stderr.slice(-200));
+  return out;
 }
 
 // Parse ffmpeg stderr `time=HH:MM:SS.xx` to drive progress across N segments.

@@ -31,11 +31,15 @@ export default function Player() {
   const showCaptions = useEditor((s) => s.showCaptions);
   const placed = placeTrack(segments, "video");
   const overlayPlaced = placeTrack(segments, "overlay");
+  const audioPlaced = placeTrack(segments, "audio");
   const total = timelineDuration(segments);
   const loadedClip = useRef<string | null>(null);
   const overlayRef = useRef<HTMLVideoElement>(null);
   const loadedOverlay = useRef<string | null>(null);
   const activeOverlay = locate(overlayPlaced, playhead);
+  const audioElRef = useRef<HTMLAudioElement>(null);
+  const loadedAudio = useRef<string | null>(null);
+  const hasAudioTrack = audioPlaced.length > 0;
 
   const placedCaps = placeCaptions(segments, captions);
   const activeCap = showCaptions ? captionAt(placedCaps, playhead) : null;
@@ -85,7 +89,9 @@ export default function Player() {
     if (!hit) return;
     const asset = assets[hit.seg.clipId];
     if (!asset) return;
-    v.muted = !!hit.seg.muted; // honor per-segment mute
+    // When the A1 audio track covers this time, it provides the sound → mute base.
+    const a1Here = !!locate(audioPlaced, t);
+    v.muted = !!hit.seg.muted || a1Here;
     v.volume = fadeFactor(hit.seg, t); // audio fade in/out
     if (loadedClip.current !== asset.id) {
       loadedClip.current = asset.id;
@@ -131,14 +137,54 @@ export default function Player() {
     if (forceSeek && Math.abs(v.currentTime - hit.srcTime) > 0.25) v.currentTime = hit.srcTime;
   }
 
+  // Keep the A1 audio <audio> element synced to the audio track.
+  function syncAudio(t: number, forceSeek: boolean) {
+    const a = audioElRef.current;
+    if (!a) return;
+    const hit = locate(audioPlaced, t);
+    if (!hit) {
+      if (!a.paused) a.pause();
+      loadedAudio.current = null;
+      return;
+    }
+    const asset = assets[hit.seg.clipId];
+    if (!asset) return;
+    a.volume = fadeFactor(hit.seg, t) * (hit.seg.muted ? 0 : 1);
+    if (loadedAudio.current !== asset.id) {
+      loadedAudio.current = asset.id;
+      a.src = asset.mediaUrl;
+      a.load();
+      const onMeta = () => {
+        a.currentTime = hit.srcTime;
+        if (playing) a.play().catch(() => {});
+        a.removeEventListener("loadedmetadata", onMeta);
+      };
+      a.addEventListener("loadedmetadata", onMeta);
+      return;
+    }
+    if (forceSeek && Math.abs(a.currentTime - hit.srcTime) > 0.25) a.currentTime = hit.srcTime;
+  }
+
   // React to scrubbing while paused.
   useEffect(() => {
     if (!playing) {
       syncToTimeline(playhead, true);
       syncOverlay(playhead, true);
+      syncAudio(playhead, true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playhead, segments.length]);
+
+  // Play/pause the A1 audio alongside the base.
+  useEffect(() => {
+    const a = audioElRef.current;
+    if (!a) return;
+    if (playing) {
+      syncAudio(useEditor.getState().playhead, true);
+      if (locate(audioPlaced, useEditor.getState().playhead)) a.play().catch(() => {});
+    } else a.pause();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing]);
 
   // Play/pause the overlay alongside the base.
   useEffect(() => {
@@ -190,6 +236,13 @@ export default function Player() {
             if (locate(overlayPlaced, tlTime)) {
               if (ov.paused) ov.play().catch(() => {});
             } else if (!ov.paused) ov.pause();
+          }
+          syncAudio(tlTime, false);
+          const au = audioElRef.current;
+          if (au) {
+            if (locate(audioPlaced, tlTime)) {
+              if (au.paused) au.play().catch(() => {});
+            } else if (!au.paused) au.pause();
           }
         }
       }
@@ -248,6 +301,7 @@ export default function Player() {
               </div>
             ))}
             {activeCap && <div className="subtitle">{activeCap.text}</div>}
+            {hasAudioTrack && <audio ref={audioElRef} style={{ display: "none" }} />}
           </>
         ) : (
           <div className="player-empty">

@@ -116,11 +116,12 @@ export async function startExport(
   burnSubtitles?: CaptionLine[],
   texts?: TextOverlayItem[],
   overlays?: OverlayExportItem[],
+  audioTrack?: ExportEdlItem[],
 ): Promise<string> {
   const res = await apiFetch("/api/export", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ projectId, edl, burnSubtitles, texts, overlays }),
+    body: JSON.stringify({ projectId, edl, burnSubtitles, texts, overlays, audioTrack }),
   });
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "export failed");
   return (await res.json()).jobId;

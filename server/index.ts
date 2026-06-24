@@ -312,10 +312,19 @@ interface ExportBody {
     ox2?: number;
     oy2?: number;
   }[];
+  audioTrack?: {
+    clipId: string;
+    in: number;
+    out: number;
+    muted?: boolean;
+    fadeIn?: number;
+    fadeOut?: number;
+  }[];
 }
 
 async function handleExport(req: Request): Promise<Response> {
-  const { projectId, edl, burnSubtitles, texts, overlays } = (await req.json()) as ExportBody;
+  const { projectId, edl, burnSubtitles, texts, overlays, audioTrack } =
+    (await req.json()) as ExportBody;
   const project = await loadProject(projectId);
   if (!project) return bad("project not found", 404);
   if (!edl?.length) return bad("empty timeline");
@@ -356,6 +365,19 @@ async function handleExport(req: Request): Promise<Response> {
     }];
   });
 
+  const audioItems: EdlSegment[] = (audioTrack ?? []).flatMap((a) => {
+    const clip = project.clips.find((c) => c.id === a.clipId);
+    if (!clip) return [];
+    return [{
+      src: resolveMedia(projectId, clip.file)!,
+      in: a.in,
+      out: a.out,
+      muted: a.muted,
+      fadeIn: a.fadeIn,
+      fadeOut: a.fadeOut,
+    }];
+  });
+
   const job = createJob();
   const stamp = job.id;
   await mkdir(outputDir(projectId), { recursive: true });
@@ -370,6 +392,7 @@ async function handleExport(req: Request): Promise<Response> {
         segments, outAbs, tmp,
         (p) => updateJob(job.id, { progress: p }),
         burnSubtitles, texts, overlayItems,
+        audioItems.length ? audioItems : undefined,
       );
       updateJob(job.id, {
         status: "done",

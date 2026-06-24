@@ -59,8 +59,23 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
       ox2: p.ox2,
       oy2: p.oy2,
     }));
+    const audioTrack = placeTrack(segments, "audio").map((p) => ({
+      clipId: p.clipId,
+      in: p.in,
+      out: p.out,
+      muted: !!p.muted,
+      fadeIn: p.fadeIn,
+      fadeOut: p.fadeOut,
+    }));
     try {
-      const jobId = await startExport(projectId, edl, subs, textItems, overlays);
+      const jobId = await startExport(
+        projectId,
+        edl,
+        subs,
+        textItems,
+        overlays,
+        audioTrack.length ? audioTrack : undefined,
+      );
       poll.current = window.setInterval(async () => {
         try {
           const j = await getJob(jobId);

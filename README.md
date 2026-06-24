@@ -62,6 +62,9 @@ Without them the app still runs; the Subtitles/Translate buttons just stay disab
 - **Import + preview** — `+ Import Media`, ffprobe metadata in Details, range-streamed playback.
 - **Cut / trim** — split at playhead (`S`), drag segment handles to trim, delete (`⌫`). Non-destructive EDL; sources never mutated until export.
 - **Separate audio** — Details → `Separate Audio`, extracts an AAC track onto A1.
+  When the **A1 track has segments it becomes the authoritative output audio**:
+  the player plays A1 (base video muted under it) and export muxes A1 as the
+  output audio (per-segment mute/fades honored), replacing the video's own audio.
 - **Export** — top-right `Export`, ffmpeg renders the timeline EDL to mp4 with live progress, then download.
 
 Shortcuts: `Space` play/pause · `S` split · `⌫`/`Del` delete selected.
