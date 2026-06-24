@@ -7,7 +7,7 @@ import {
   type ClipMeta,
 } from "./workspace.ts";
 import {
-  probe, thumbnails, extractAudio, extractAudioRange, render,
+  probe, thumbnails, extractAudio, extractAudioRange, peaks, render,
   type EdlSegment, type BurnCaption, type BurnText, type OverlayItem,
 } from "./ffmpeg.ts";
 import { createJob, getJob, updateJob } from "./jobs.ts";
@@ -144,6 +144,17 @@ const server = Bun.serve({
 
       if (path === "/api/capabilities" && req.method === "GET") {
         return json({ transcribe: modelAvailable(), translate: translateAvailable() });
+      }
+
+      const peaksMatch = path.match(/^\/api\/peaks\/([^/]+)\/([^/]+)$/);
+      if (peaksMatch && req.method === "GET") {
+        const [, pid, cid] = peaksMatch;
+        const project = await loadProject(pid);
+        const clip = project?.clips.find((c) => c.id === cid);
+        if (!clip) return bad("clip not found", 404);
+        const abs = resolveMedia(pid, clip.file);
+        if (!abs || !existsSync(abs)) return bad("not found", 404);
+        return json({ peaks: await peaks(abs, 1000) });
       }
 
       const jobMatch = path.match(/^\/api\/job\/([^/]+)$/);

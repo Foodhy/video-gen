@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEditor, hasFx, snapValue, type PlacedSegment } from "../../state/editor.ts";
+import { getPeaks } from "../../lib/api.ts";
 
 export default function Clip({
   placed,
@@ -20,6 +21,8 @@ export default function Clip({
     (s) => s.selectedSegmentId === placed.id || s.selectedIds.includes(placed.id),
   );
   const selectSegment = useEditor((s) => s.selectSegment);
+  const projectId = useEditor((s) => s.projectId);
+  const setAssetPeaks = useEditor((s) => s.setAssetPeaks);
   const trimSegment = useEditor((s) => s.trimSegment);
   const record = useEditor((s) => s.record);
   const dragState = useRef<{ side: "l" | "r"; startX: number; in0: number; out0: number } | null>(
@@ -95,6 +98,32 @@ export default function Clip({
   }
 
   const isAudio = placed.track === "audio";
+
+  // Lazy-load real waveform peaks for audio (and video-with-audio) clips.
+  useEffect(() => {
+    if (!asset || !projectId || asset.peaks || !asset.hasAudio) return;
+    let cancel = false;
+    getPeaks(projectId, asset.id).then((p) => {
+      if (!cancel && p.length) setAssetPeaks(asset.id, p);
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [asset?.id, asset?.peaks, projectId]);
+
+  // Waveform polygon for this segment's [in,out] slice of the asset.
+  function wavePoints(): string | null {
+    if (!asset?.peaks?.length || !asset.duration) return null;
+    const N = asset.peaks.length;
+    const i0 = Math.max(0, Math.floor((placed.in / asset.duration) * N));
+    const i1 = Math.min(N, Math.ceil((placed.out / asset.duration) * N));
+    const slice = asset.peaks.slice(i0, i1);
+    if (slice.length < 2) return null;
+    const top = slice.map((p, i) => `${i},${(0.5 - p * 0.48).toFixed(3)}`);
+    const bot = slice.map((p, i) => `${i},${(0.5 + p * 0.48).toFixed(3)}`).reverse();
+    return [...top, ...bot].join(" ");
+  }
+  const wave = isAudio ? wavePoints() : null;
   const thumbs = asset?.thumbs ?? [];
 
   return (
@@ -144,7 +173,13 @@ export default function Clip({
         />
       ) : null}
       {isAudio ? (
-        <div className="wave" />
+        wave ? (
+          <svg className="wave-svg" viewBox={`0 0 ${(wave.split(" ").length / 2) | 0} 1`} preserveAspectRatio="none">
+            <polygon points={wave} />
+          </svg>
+        ) : (
+          <div className="wave" />
+        )
       ) : (
         <div className="thumbs">
           {thumbs.map((t, i) => (

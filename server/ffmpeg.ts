@@ -78,6 +78,31 @@ export async function extractAudio(input: string, out: string): Promise<void> {
   if (code !== 0) throw new Error("extractAudio failed: " + stderr);
 }
 
+// Downsampled waveform peaks (0..1) for an audio/video file.
+export async function peaks(path: string, n = 800): Promise<number[]> {
+  const proc = Bun.spawn(
+    ["ffmpeg", "-v", "error", "-i", path, "-ac", "1", "-ar", "8000", "-f", "s16le", "-"],
+    { stdout: "pipe", stderr: "ignore" },
+  );
+  const buf = new Uint8Array(await new Response(proc.stdout).arrayBuffer());
+  await proc.exited;
+  const count = Math.floor(buf.length / 2);
+  const samples = new Int16Array(buf.buffer, 0, count);
+  const out = new Array(n).fill(0);
+  if (count === 0) return out;
+  const per = Math.max(1, Math.floor(count / n));
+  for (let i = 0; i < n; i++) {
+    let mx = 0;
+    const s = i * per, e = Math.min(count, s + per);
+    for (let j = s; j < e; j++) {
+      const v = Math.abs(samples[j]);
+      if (v > mx) mx = v;
+    }
+    out[i] = mx / 32768;
+  }
+  return out;
+}
+
 // Extract a time range [in, in+dur] of audio to m4a or mp3.
 export async function extractAudioRange(
   input: string,

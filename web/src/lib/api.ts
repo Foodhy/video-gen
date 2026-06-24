@@ -217,6 +217,12 @@ export async function saveDoc(projectId: string, doc: unknown): Promise<void> {
   });
 }
 
+export async function getPeaks(projectId: string, clipId: string): Promise<number[]> {
+  const res = await apiFetch(`/api/peaks/${projectId}/${clipId}`);
+  if (!res.ok) return [];
+  return (await res.json()).peaks ?? [];
+}
+
 export async function getJob(jobId: string): Promise<JobState> {
   const res = await apiFetch("/api/job/" + jobId);
   if (!res.ok) throw new Error("job poll failed");

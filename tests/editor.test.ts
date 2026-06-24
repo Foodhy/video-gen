@@ -239,7 +239,7 @@ test("adding a separated audio track leaves the video timeline intact", () => {
   expect(edl.every((p) => p.out > p.in)).toBe(true);
 });
 
-test("splitting video after separate-audio does not touch the audio track", () => {
+test("split is a razor: cuts the segment under the playhead on every track", () => {
   const s = useEditor.getState();
   s.addAsset(asset("v", 6, "video"));
   s.addSegmentForAsset("v");
@@ -249,7 +249,7 @@ test("splitting video after separate-audio does not touch the audio track", () =
   s.splitAtPlayhead();
   const st = useEditor.getState();
   expect(placeTrack(st.segments, "video")).toHaveLength(2);
-  expect(placeTrack(st.segments, "audio")).toHaveLength(1); // untouched
+  expect(placeTrack(st.segments, "audio")).toHaveLength(2); // audio is also split
 });
 
 test("removeAsset of the audio drops only audio segments", () => {

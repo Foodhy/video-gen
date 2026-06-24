@@ -4,6 +4,7 @@ import type { ClipMeta } from "../lib/api.ts";
 export interface Asset extends ClipMeta {
   mediaUrl: string;
   thumbs: string[];
+  peaks?: number[]; // waveform peaks (lazy-loaded)
 }
 
 export type TrackKind = "video" | "audio" | "overlay";
@@ -130,6 +131,7 @@ interface EditorState {
     folderOf?: Record<string, string>;
   }) => void;
   addAsset: (a: Asset) => void;
+  setAssetPeaks: (assetId: string, peaks: number[]) => void;
   removeAsset: (assetId: string) => void;
   addSegmentForAsset: (assetId: string) => void;
   addSegmentAt: (assetId: string, track: TrackKind, start: number) => void;
@@ -518,6 +520,11 @@ export const useEditor = create<EditorState>((set, get) => ({
   addAsset: (a) =>
     set((s) => ({ assets: { ...s.assets, [a.id]: a }, selectedAssetId: a.id })),
 
+  setAssetPeaks: (assetId, peaks) =>
+    set((s) =>
+      s.assets[assetId] ? { assets: { ...s.assets, [assetId]: { ...s.assets[assetId], peaks } } } : s,
+    ),
+
   removeAsset: (assetId) => {
     get().record();
     set((s) => {
@@ -600,22 +607,31 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   splitAtPlayhead: () => {
-    const t0 = get().playhead;
-    const placed0 = placeTrack(get().segments, "video");
-    if (!placed0.find((p) => t0 > p.start + 0.02 && t0 < p.start + p.dur - 0.02)) return;
+    const { segments, playhead: t } = get();
+    // Razor: split the segment under the playhead on every track (video/overlay/audio).
+    const hits: PlacedSegment[] = [];
+    for (const tr of ["video", "overlay", "audio"] as TrackKind[]) {
+      const hit = placeTrack(segments, tr).find(
+        (p) => t > p.start + 0.02 && t < p.start + p.dur - 0.02,
+      );
+      if (hit) hits.push(hit);
+    }
+    if (!hits.length) return;
     get().record();
     set((s) => {
-      const t = s.playhead;
-      const placed = placeTrack(s.segments, "video");
-      const hit = placed.find((p) => t > p.start + 0.02 && t < p.start + p.dur - 0.02);
-      if (!hit) return s;
-      const cut = hit.in + (t - hit.start);
-      const left: Segment = { ...hit, id: segId(), in: hit.in, out: cut, start: hit.start };
-      const right: Segment = { ...hit, id: segId(), in: cut, out: hit.out, start: t };
-      const idx = s.segments.findIndex((x) => x.id === hit.id);
       const next = [...s.segments];
-      next.splice(idx, 1, left, right);
-      return { segments: next, selectedSegmentId: right.id };
+      let lastRight = "";
+      for (const hit of hits) {
+        const idx = next.findIndex((x) => x.id === hit.id);
+        if (idx < 0) continue;
+        const sp = hit.speed && hit.speed > 0 ? hit.speed : 1;
+        const cut = hit.in + (t - hit.start) * sp; // speed-aware source cut
+        const left: Segment = { ...hit, id: segId(), in: hit.in, out: cut, start: hit.start };
+        const right: Segment = { ...hit, id: segId(), in: cut, out: hit.out, start: t };
+        next.splice(idx, 1, left, right);
+        lastRight = right.id;
+      }
+      return { segments: next, selectedSegmentId: lastRight || s.selectedSegmentId };
     });
   },
 

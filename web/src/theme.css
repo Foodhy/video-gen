@@ -1088,6 +1088,15 @@ body {
   object-fit: cover;
   opacity: 0.85;
 }
+.seg .wave-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.seg .wave-svg polygon {
+  fill: var(--accent-1);
+  opacity: 0.6;
+}
 .seg .wave {
   width: 100%;
   height: 100%;
