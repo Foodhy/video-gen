@@ -285,6 +285,16 @@ test("reorder only touches segments of the same track", () => {
   expect(ids).toContain("m");
 });
 
+test("addSegmentAt drops a clip at a position on a track", () => {
+  const s = useEditor.getState();
+  s.addAsset(asset("v", 6, "video"));
+  s.addSegmentAt("v", "overlay", 4);
+  const ov = placeTrack(useEditor.getState().segments, "overlay");
+  expect(ov).toHaveLength(1);
+  expect(ov[0].start).toBe(4);
+  expect(ov[0].oscale).toBeGreaterThan(0); // overlay defaults seeded
+});
+
 test("setSegmentStart repositions a clip (clamped >=0)", () => {
   useEditor.setState({ segments: [seg("a", 0, 2, { start: 0 })] });
   useEditor.getState().setSegmentStart("a", 7);

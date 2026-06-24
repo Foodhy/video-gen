@@ -38,7 +38,32 @@ export default function Timeline() {
   const setFx = useEditor((s) => s.setFx);
   const clearFx = useEditor((s) => s.clearFx);
   const setSegmentStart = useEditor((s) => s.setSegmentStart);
+  const addSegmentAt = useEditor((s) => s.addSegmentAt);
   const sendToTrack = useEditor((s) => s.sendToTrack);
+
+  // Accept media dragged from the library → drop it where you release it.
+  function onTimelineDragOver(e: React.DragEvent) {
+    if (e.dataTransfer.types.includes("application/x-asset-id")) e.preventDefault();
+  }
+  function onTimelineDrop(e: React.DragEvent) {
+    const id = e.dataTransfer.getData("application/x-asset-id");
+    if (!id) return;
+    e.preventDefault();
+    const asset = useEditor.getState().assets[id];
+    if (!asset) return;
+    const trackEl = (e.target as HTMLElement).closest<HTMLElement>("[data-track]");
+    let track = (trackEl?.dataset.track as "video" | "audio" | "overlay") ?? asset.kind;
+    if (asset.kind === "audio") track = "audio"; // audio media only on the audio track
+    else if (track === "audio") track = "video"; // video media can't sit on A1
+    const el = scrollRef.current;
+    let start = 0;
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      start = Math.max(0, (e.clientX - rect.left + el.scrollLeft) / pxPerSec);
+    }
+    if (snapEnabled) start = snapValue(start, snapPoints, 8 / pxPerSec);
+    addSegmentAt(id, track, start);
+  }
   const snapEnabled = useEditor((s) => s.snapEnabled);
   const toggleSnap = useEditor((s) => s.toggleSnap);
   const snapPoints = buildSnapPoints(segments, texts);
@@ -358,6 +383,8 @@ export default function Timeline() {
           onPointerMove={onInnerPointerMove}
           onPointerUp={onInnerPointerUp}
           onContextMenu={onInnerContextMenu}
+          onDragOver={onTimelineDragOver}
+          onDrop={onTimelineDrop}
         >
           <div className="tl-ruler" style={{ width: contentW }}>
             {Array.from({ length: tickCount }, (_, i) => {

@@ -110,6 +110,7 @@ interface EditorState {
   addAsset: (a: Asset) => void;
   removeAsset: (assetId: string) => void;
   addSegmentForAsset: (assetId: string) => void;
+  addSegmentAt: (assetId: string, track: TrackKind, start: number) => void;
   selectAsset: (id: string | null) => void;
   selectSegment: (id: string | null) => void;
   setSelection: (ids: string[]) => void;
@@ -498,6 +499,24 @@ export const useEditor = create<EditorState>((set, get) => ({
         in: 0,
         out: a.duration,
         start: trackDuration(s.segments, a.kind), // append at the track's current end
+      };
+      return { segments: [...s.segments, seg], selectedSegmentId: seg.id };
+    });
+  },
+
+  addSegmentAt: (assetId, track, start) => {
+    get().record();
+    set((s) => {
+      const a = s.assets[assetId];
+      if (!a) return s;
+      const seg: Segment = {
+        id: segId(),
+        clipId: a.id,
+        track,
+        in: 0,
+        out: a.duration,
+        start: Math.max(0, start),
+        ...(track === "overlay" ? { ox: 0.5, oy: 0.5, oscale: 0.4 } : {}),
       };
       return { segments: [...s.segments, seg], selectedSegmentId: seg.id };
     });

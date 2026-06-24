@@ -16,7 +16,7 @@ export default function Track({
   const placed = placeTrack(segments, kind);
 
   return (
-    <div className={"tl-track" + (kind === "audio" ? " audio" : "")}>
+    <div className={"tl-track" + (kind === "audio" ? " audio" : "")} data-track={kind}>
       <span className="tl-track-label">
         {kind === "audio" ? "A1 — Audio" : kind === "overlay" ? "V2 — Overlay" : "V1 — Video"}
       </span>
