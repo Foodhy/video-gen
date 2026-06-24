@@ -61,6 +61,32 @@ export default function Timeline() {
   // Marquee rubber-band selection (client coords).
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const marqueeMoved = useRef(false);
+  const [bgMenu, setBgMenu] = useState<{ x: number; y: number } | null>(null);
+  const addText = useEditor((s) => s.addText);
+
+  function onInnerContextMenu(e: React.MouseEvent) {
+    if ((e.target as HTMLElement).closest(".seg")) return; // clip menu handles its own
+    e.preventDefault();
+    setBgMenu({ x: e.clientX, y: e.clientY });
+  }
+
+  function bgMenuItems(): MenuItem[] {
+    const vids = placeTrack(segments, "video");
+    const insideClip = vids.some((p) => playhead > p.start + 0.02 && playhead < p.start + p.dur - 0.02);
+    const allIds = segments.map((s) => s.id);
+    return [
+      { label: "Split at playhead", hint: "S", disabled: !insideClip, onClick: () => splitAtPlayhead() },
+      { label: "Add text overlay here", onClick: () => addText() },
+      { separator: true, label: "" },
+      { label: "Select all clips", disabled: !allIds.length, onClick: () => setSelection(allIds) },
+      { label: "Clear selection", disabled: selCount === 0, onClick: () => setSelection([]) },
+      { separator: true, label: "" },
+      { label: snapEnabled ? "Snap: on → turn off" : "Snap: off → turn on", onClick: () => toggleSnap() },
+      { separator: true, label: "" },
+      { label: "Go to start", hint: "Home", onClick: () => setPlayhead(0) },
+      { label: "Go to end", hint: "End", onClick: () => setPlayhead(total) },
+    ];
+  }
 
   function onInnerPointerDown(e: React.PointerEvent) {
     // Only start a marquee on empty timeline background (clips stop propagation).
@@ -289,6 +315,7 @@ export default function Timeline() {
           onPointerDown={onInnerPointerDown}
           onPointerMove={onInnerPointerMove}
           onPointerUp={onInnerPointerUp}
+          onContextMenu={onInnerContextMenu}
         >
           <div className="tl-ruler" style={{ width: contentW }}>
             {Array.from({ length: tickCount }, (_, i) => {
@@ -371,6 +398,9 @@ export default function Timeline() {
           items={menuItems(menu.seg)}
           onClose={() => setMenu(null)}
         />
+      )}
+      {bgMenu && (
+        <ContextMenu x={bgMenu.x} y={bgMenu.y} items={bgMenuItems()} onClose={() => setBgMenu(null)} />
       )}
       {marquee && marqueeMoved.current && (
         <div
