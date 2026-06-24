@@ -910,6 +910,15 @@ body {
   white-space: nowrap;
 }
 
+/* marquee rubber-band selection */
+.tl-marquee {
+  position: fixed;
+  z-index: 30;
+  border: 1px solid var(--accent-0);
+  background: rgba(245, 240, 232, 0.12);
+  pointer-events: none;
+}
+
 /* playhead */
 .tl-playhead {
   position: absolute;

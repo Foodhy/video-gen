@@ -22,9 +22,11 @@ export default function Timeline() {
   const selectedTextId = useEditor((s) => s.selectedTextId);
   const selectText = useEditor((s) => s.selectText);
   const setPlayheadRaw = useEditor((s) => s.setPlayhead);
+  const setSelection = useEditor((s) => s.setSelection);
   const pxPerSec = useEditor((s) => s.pxPerSec);
   const playhead = useEditor((s) => s.playhead);
   const selSeg = useEditor((s) => s.selectedSegmentId);
+  const selCount = useEditor((s) => s.selectedIds.length);
   const setPlayhead = useEditor((s) => s.setPlayhead);
   const setZoom = useEditor((s) => s.setZoom);
   const splitAtPlayhead = useEditor((s) => s.splitAtPlayhead);
@@ -56,6 +58,43 @@ export default function Timeline() {
   const showToast = useEditor((s) => s.showToast);
 
   const [menu, setMenu] = useState<{ x: number; y: number; seg: PlacedSegment } | null>(null);
+  // Marquee rubber-band selection (client coords).
+  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const marqueeMoved = useRef(false);
+
+  function onInnerPointerDown(e: React.PointerEvent) {
+    // Only start a marquee on empty timeline background (clips stop propagation).
+    if (e.button !== 0) return;
+    const el = e.target as HTMLElement;
+    if (el.closest(".seg")) return;
+    marqueeMoved.current = false;
+    setMarquee({ x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY });
+  }
+  function onInnerPointerMove(e: React.PointerEvent) {
+    if (!marquee) return;
+    if (Math.abs(e.clientX - marquee.x0) > 3 || Math.abs(e.clientY - marquee.y0) > 3)
+      marqueeMoved.current = true;
+    setMarquee({ ...marquee, x1: e.clientX, y1: e.clientY });
+  }
+  function onInnerPointerUp(e: React.PointerEvent) {
+    if (!marquee) return;
+    if (marqueeMoved.current && scrollRef.current) {
+      const L = Math.min(marquee.x0, e.clientX);
+      const R = Math.max(marquee.x0, e.clientX);
+      const T = Math.min(marquee.y0, e.clientY);
+      const B = Math.max(marquee.y0, e.clientY);
+      const ids: string[] = [];
+      scrollRef.current.querySelectorAll<HTMLElement>("[data-segid]").forEach((node) => {
+        const r = node.getBoundingClientRect();
+        const hit = r.left < R && r.right > L && r.top < B && r.bottom > T;
+        if (hit) ids.push(node.dataset.segid!);
+      });
+      setSelection(ids);
+    } else {
+      seek(e); // treat as a plain click → move playhead
+    }
+    setMarquee(null);
+  }
 
   const total = timelineDuration(segments);
   const contentW = Math.max(total * pxPerSec + 200, 800);
@@ -210,10 +249,10 @@ export default function Timeline() {
         <button
           className="tl-btn"
           onClick={deleteSelected}
-          disabled={!selSeg}
+          disabled={!selSeg && selCount === 0}
           title="Delete selected (⌫)"
         >
-          🗑 Delete
+          🗑 Delete{selCount > 1 ? ` (${selCount})` : ""}
         </button>
         <button className="tl-btn" onClick={() => jumpEdit(-1)} title="Previous edit (,)">
           ⟸
@@ -244,7 +283,13 @@ export default function Timeline() {
       </div>
 
       <div className="tl-scroll" ref={scrollRef}>
-        <div className="tl-inner" style={{ width: contentW }} onClick={seek}>
+        <div
+          className="tl-inner"
+          style={{ width: contentW }}
+          onPointerDown={onInnerPointerDown}
+          onPointerMove={onInnerPointerMove}
+          onPointerUp={onInnerPointerUp}
+        >
           <div className="tl-ruler" style={{ width: contentW }}>
             {Array.from({ length: tickCount }, (_, i) => {
               const t = i * stepSec;
@@ -325,6 +370,17 @@ export default function Timeline() {
           y={menu.y}
           items={menuItems(menu.seg)}
           onClose={() => setMenu(null)}
+        />
+      )}
+      {marquee && marqueeMoved.current && (
+        <div
+          className="tl-marquee"
+          style={{
+            left: Math.min(marquee.x0, marquee.x1),
+            top: Math.min(marquee.y0, marquee.y1),
+            width: Math.abs(marquee.x1 - marquee.x0),
+            height: Math.abs(marquee.y1 - marquee.y0),
+          }}
         />
       )}
     </section>

@@ -261,6 +261,17 @@ test("reorder only touches segments of the same track", () => {
   expect(ids).toContain("m");
 });
 
+test("marquee multi-select deletes all selected segments", () => {
+  useEditor.setState({ segments: [seg("a", 0, 1), seg("b", 0, 1), seg("c", 0, 1)] });
+  useEditor.getState().setSelection(["a", "c"]);
+  expect(useEditor.getState().selectedIds).toEqual(["a", "c"]);
+  expect(useEditor.getState().selectedSegmentId).toBe("a"); // primary
+  useEditor.getState().deleteSelected();
+  expect(useEditor.getState().segments.map((s) => s.id)).toEqual(["b"]);
+  useEditor.getState().undo();
+  expect(useEditor.getState().segments.map((s) => s.id)).toEqual(["a", "b", "c"]);
+});
+
 test("captions stay aligned after a split", () => {
   const s = useEditor.getState();
   s.addAsset(asset("v", 10, "video"));

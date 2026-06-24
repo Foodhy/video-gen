@@ -16,7 +16,9 @@ export default function Clip({
   const playhead = useEditor((s) => s.playhead);
   const pxPerSec = useEditor((s) => s.pxPerSec);
   const assets = useEditor((s) => s.assets);
-  const selected = useEditor((s) => s.selectedSegmentId === placed.id);
+  const selected = useEditor(
+    (s) => s.selectedSegmentId === placed.id || s.selectedIds.includes(placed.id),
+  );
   const selectSegment = useEditor((s) => s.selectSegment);
   const trimSegment = useEditor((s) => s.trimSegment);
   const record = useEditor((s) => s.record);
@@ -100,6 +102,7 @@ export default function Clip({
   return (
     <div
       className={"seg" + (selected ? " sel" : "") + (isAudio ? " audio" : "") + (dragging ? " dragging" : "")}
+      data-segid={placed.id}
       style={{ left, width, transform: dragDX ? `translateX(${dragDX}px)` : undefined }}
       onPointerDown={onBodyDown}
       onPointerMove={onBodyMove}

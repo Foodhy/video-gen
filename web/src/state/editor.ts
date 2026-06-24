@@ -75,6 +75,7 @@ interface EditorState {
   segments: Segment[];
   selectedAssetId: string | null;
   selectedSegmentId: string | null;
+  selectedIds: string[]; // multi-selection (marquee); selectedSegmentId is the primary
   playhead: number; // timeline seconds
   playing: boolean;
   pxPerSec: number;
@@ -104,6 +105,7 @@ interface EditorState {
   addSegmentForAsset: (assetId: string) => void;
   selectAsset: (id: string | null) => void;
   selectSegment: (id: string | null) => void;
+  setSelection: (ids: string[]) => void;
   splitAtPlayhead: () => void;
   trimSegment: (id: string, patch: { in?: number; out?: number }) => void;
   deleteSegment: (id: string) => void;
@@ -376,6 +378,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   segments: [],
   selectedAssetId: null,
   selectedSegmentId: null,
+  selectedIds: [],
   playhead: 0,
   playing: false,
   captions: {},
@@ -404,6 +407,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       selectedTextId: null,
       selectedAssetId: null,
       selectedSegmentId: null,
+      selectedIds: [],
       playhead: 0,
       playing: false,
       past: [],
@@ -419,6 +423,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       texts: texts ?? [],
       selectedTextId: null,
       selectedSegmentId: null,
+      selectedIds: [],
       selectedAssetId: assets[0]?.id ?? null,
       playhead: 0,
       playing: false,
@@ -466,7 +471,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   selectAsset: (id) => set({ selectedAssetId: id }),
-  selectSegment: (id) => set({ selectedSegmentId: id }),
+  selectSegment: (id) => set({ selectedSegmentId: id, selectedIds: id ? [id] : [] }),
+  setSelection: (ids) => set({ selectedIds: ids, selectedSegmentId: ids[0] ?? null }),
 
   splitAtPlayhead: () => {
     const t0 = get().playhead;
@@ -512,11 +518,13 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   deleteSelected: () => {
-    if (!get().selectedSegmentId) return;
+    const ids = new Set(get().selectedIds.length ? get().selectedIds : [get().selectedSegmentId]);
+    if (ids.size === 0 || (ids.size === 1 && ids.has(null as any))) return;
     get().record();
     set((s) => ({
-      segments: s.segments.filter((x) => x.id !== s.selectedSegmentId),
+      segments: s.segments.filter((x) => !ids.has(x.id)),
       selectedSegmentId: null,
+      selectedIds: [],
     }));
   },
 
