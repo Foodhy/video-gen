@@ -54,6 +54,8 @@ export default function Player() {
   const showCaptions = useEditor((s) => s.showCaptions);
   const captionSplitMode = useEditor((s) => s.captionSplitMode);
   const splitCaptionByWords = useEditor((s) => s.splitCaptionByWords);
+  const trackHidden = useEditor((s) => s.trackHidden);
+  const trackMuted = useEditor((s) => s.trackMuted);
   const placed = placeTrack(segments, "video");
   const overlayPlaced = placeTrack(segments, "overlay");
   const audioPlaced = placeTrack(segments, "audio");
@@ -81,9 +83,9 @@ export default function Player() {
   const activeHit = locate(placed, playhead);
   // Strict: is there actually a video clip under the playhead? In gaps / past the
   // end there isn't — hide the base video so the black stage shows (no stale frame).
-  const videoVisible = placed.some(
-    (p) => p.dur > 0 && playhead >= p.start && playhead < p.start + p.dur,
-  );
+  const videoVisible =
+    !trackHidden.video &&
+    placed.some((p) => p.dur > 0 && playhead >= p.start && playhead < p.start + p.dur);
   const fade = activeHit ? fadeFactor(activeHit.seg, playhead) : 1;
 
   // Text overlays visible at the playhead (plus the selected one, for editing).
@@ -122,9 +124,10 @@ export default function Player() {
     }
     const asset = assets[hit.seg.clipId];
     if (!asset) return;
-    // When the A1 audio track covers this time, it provides the sound → mute base.
-    const a1Here = !!locate(audioPlaced, t);
-    v.muted = !!hit.seg.muted || a1Here;
+    // A1 provides the sound when present (unless that track is muted/hidden) → mute base.
+    const a1Off = !!trackMuted.audio || !!trackHidden.audio;
+    const a1Here = !!locate(audioPlaced, t) && !a1Off;
+    v.muted = !!hit.seg.muted || a1Here || !!trackMuted.video;
     v.volume = Math.min(1, fadeFactor(hit.seg, t) * (hit.seg.volume ?? 1)); // fade × gain (preview caps at 1)
     v.playbackRate = hit.seg.speed ?? 1;
     if (loadedClip.current !== asset.id) {
@@ -188,7 +191,8 @@ export default function Player() {
     const asset = assets[hit.seg.clipId];
     if (!asset) return;
     a.playbackRate = hit.seg.speed ?? 1;
-    a.volume = Math.min(1, fadeFactor(hit.seg, t) * (hit.seg.muted ? 0 : hit.seg.volume ?? 1));
+    const a1Off = !!trackMuted.audio || !!trackHidden.audio;
+    a.volume = a1Off ? 0 : Math.min(1, fadeFactor(hit.seg, t) * (hit.seg.muted ? 0 : hit.seg.volume ?? 1));
     if (loadedAudio.current !== asset.id) {
       loadedAudio.current = asset.id;
       a.src = asset.mediaUrl;
@@ -338,7 +342,7 @@ export default function Player() {
               muted
               className="overlay-video"
               style={{
-                display: activeOverlay ? "block" : "none",
+                display: activeOverlay && !trackHidden.overlay ? "block" : "none",
                 left: (activeOverlay ? overlayPosAt(activeOverlay.seg, playhead).x : 0.5) * 100 + "%",
                 top: (activeOverlay ? overlayPosAt(activeOverlay.seg, playhead).y : 0.5) * 100 + "%",
                 width: (activeOverlay?.seg.oscale ?? 0.4) * 100 + "%",

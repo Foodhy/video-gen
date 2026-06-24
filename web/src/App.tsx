@@ -54,6 +54,8 @@ export default function App() {
           textComponents: doc.textComponents,
           folders: doc.folders,
           folderOf: doc.folderOf,
+          trackHidden: doc.trackHidden,
+          trackMuted: doc.trackMuted,
         });
         logger.success(
           "project",
@@ -79,7 +81,7 @@ export default function App() {
         localStorage.setItem(LS_KEY, s.projectId);
       }
       if (!hydrated.current || !s.projectId) return;
-      const sig = [s.segments, s.captions, s.captionLang, s.texts, s.textComponents, s.folders, s.folderOf];
+      const sig = [s.segments, s.captions, s.captionLang, s.texts, s.textComponents, s.folders, s.folderOf, s.trackHidden, s.trackMuted];
       if (sig.every((v, i) => v === prev[i])) return; // doc unchanged → ignore
       prev = sig;
       clearTimeout(timer);

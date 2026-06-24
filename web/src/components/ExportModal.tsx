@@ -7,6 +7,8 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
   const segments = useEditor((s) => s.segments);
   const captions = useEditor((s) => s.captions);
   const texts = useEditor((s) => s.texts);
+  const trackHidden = useEditor((s) => s.trackHidden);
+  const trackMuted = useEditor((s) => s.trackMuted);
   const placedCaps = placeCaptions(segments, captions);
   const hasCaps = placedCaps.length > 0;
 
@@ -31,7 +33,7 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
         out: p.out,
         speed: p.speed,
         volume: p.volume,
-        muted: !!p.muted,
+        muted: !!p.muted || !!trackMuted.video, // track-level mute
         fadeIn: p.fadeIn,
         fadeOut: p.fadeOut,
         xfadeAfter: overlap,
@@ -56,7 +58,7 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
           color: t.color,
         }))
       : undefined;
-    const overlays = placeTrack(segments, "overlay").map((p) => ({
+    const overlays = (trackHidden.overlay ? [] : placeTrack(segments, "overlay")).map((p) => ({
       clipId: p.clipId,
       in: p.in,
       out: p.out,
@@ -68,7 +70,8 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
       ox2: p.ox2,
       oy2: p.oy2,
     }));
-    const audioTrack = placeTrack(segments, "audio").map((p) => ({
+    const a1Off = !!trackMuted.audio || !!trackHidden.audio;
+    const audioTrack = (a1Off ? [] : placeTrack(segments, "audio")).map((p) => ({
       clipId: p.clipId,
       in: p.in,
       out: p.out,

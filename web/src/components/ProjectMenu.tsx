@@ -65,6 +65,8 @@ export default function ProjectMenu() {
         textComponents: doc.textComponents,
         folders: doc.folders,
         folderOf: doc.folderOf,
+        trackHidden: doc.trackHidden,
+        trackMuted: doc.trackMuted,
       });
       showToast("Opened project");
     } catch (e: any) {

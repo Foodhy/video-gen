@@ -142,6 +142,8 @@ test("serializeDoc keeps only persistable fields", () => {
     textComponents: [],
     folders: [],
     folderOf: {},
+    trackHidden: {},
+    trackMuted: {},
   });
   expect(Object.keys(doc).sort()).toEqual([
     "captionLang",
@@ -151,6 +153,8 @@ test("serializeDoc keeps only persistable fields", () => {
     "segments",
     "textComponents",
     "texts",
+    "trackHidden",
+    "trackMuted",
   ]);
 });
 

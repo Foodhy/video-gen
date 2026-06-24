@@ -110,6 +110,8 @@ interface EditorState {
   folders: { id: string; name: string }[]; // media library folders
   folderOf: Record<string, string>; // assetId -> folderId
   snapEnabled: boolean;
+  trackHidden: Partial<Record<TrackKind, boolean>>; // hide a track (preview + export)
+  trackMuted: Partial<Record<TrackKind, boolean>>; // silence a track's audio
   captionSplitMode: boolean; // click-between-words in the preview to split a subtitle
   showCaptions: boolean;
   logs: LogEntry[];
@@ -129,6 +131,8 @@ interface EditorState {
     textComponents?: TextComponent[];
     folders?: { id: string; name: string }[];
     folderOf?: Record<string, string>;
+    trackHidden?: Partial<Record<TrackKind, boolean>>;
+    trackMuted?: Partial<Record<TrackKind, boolean>>;
   }) => void;
   addAsset: (a: Asset) => void;
   setAssetPeaks: (assetId: string, peaks: number[]) => void;
@@ -188,6 +192,8 @@ interface EditorState {
   selectComponent: (id: string | null) => void;
   addTextChild: (componentId: string, start: number) => void;
   toggleSnap: () => void;
+  toggleTrackHidden: (kind: TrackKind) => void;
+  toggleTrackMuted: (kind: TrackKind) => void;
   addFolder: () => void;
   renameFolder: (id: string, name: string) => void;
   deleteFolder: (id: string) => void;
@@ -253,6 +259,8 @@ export interface EditorDoc {
   textComponents: TextComponent[];
   folders: { id: string; name: string }[];
   folderOf: Record<string, string>;
+  trackHidden?: Partial<Record<TrackKind, boolean>>;
+  trackMuted?: Partial<Record<TrackKind, boolean>>;
 }
 
 // Serialize the persistable editor document (excludes media URLs/runtime UI).
@@ -264,6 +272,8 @@ export function serializeDoc(s: {
   textComponents: TextComponent[];
   folders: { id: string; name: string }[];
   folderOf: Record<string, string>;
+  trackHidden: Partial<Record<TrackKind, boolean>>;
+  trackMuted: Partial<Record<TrackKind, boolean>>;
 }): EditorDoc {
   return {
     segments: s.segments,
@@ -273,6 +283,8 @@ export function serializeDoc(s: {
     textComponents: s.textComponents,
     folders: s.folders,
     folderOf: s.folderOf,
+    trackHidden: s.trackHidden,
+    trackMuted: s.trackMuted,
   };
 }
 
@@ -462,6 +474,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   folders: [],
   folderOf: {},
   snapEnabled: true,
+  trackHidden: {},
+  trackMuted: {},
   captionSplitMode: false,
   showCaptions: true,
   logs: [],
@@ -484,6 +498,8 @@ export const useEditor = create<EditorState>((set, get) => ({
       textComponents: [],
       folders: [],
       folderOf: {},
+      trackHidden: {},
+      trackMuted: {},
       selectedTextId: null,
       selectedComponentId: null,
       selectedAssetId: null,
@@ -496,7 +512,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       future: [],
     }),
 
-  hydrate: ({ assets, segments, captions, captionLang, texts, textComponents, folders, folderOf }) =>
+  hydrate: ({ assets, segments, captions, captionLang, texts, textComponents, folders, folderOf, trackHidden, trackMuted }) =>
     set({
       assets: Object.fromEntries(assets.map((a) => [a.id, a])),
       segments: segments ?? [],
@@ -506,6 +522,8 @@ export const useEditor = create<EditorState>((set, get) => ({
       textComponents: textComponents ?? [],
       folders: folders ?? [],
       folderOf: folderOf ?? {},
+      trackHidden: trackHidden ?? {},
+      trackMuted: trackMuted ?? {},
       selectedComponentId: null,
       selectedTextId: null,
       selectedSegmentId: null,
@@ -1032,6 +1050,10 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   toggleSnap: () => set((s) => ({ snapEnabled: !s.snapEnabled })),
+  toggleTrackHidden: (kind) =>
+    set((s) => ({ trackHidden: { ...s.trackHidden, [kind]: !s.trackHidden[kind] } })),
+  toggleTrackMuted: (kind) =>
+    set((s) => ({ trackMuted: { ...s.trackMuted, [kind]: !s.trackMuted[kind] } })),
 
   addFolder: () =>
     set((s) => ({
