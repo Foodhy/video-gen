@@ -308,6 +308,9 @@ interface ExportBody {
     ox: number;
     oy: number;
     oscale: number;
+    animate?: boolean;
+    ox2?: number;
+    oy2?: number;
   }[];
 }
 
@@ -347,6 +350,9 @@ async function handleExport(req: Request): Promise<Response> {
       ox: o.ox,
       oy: o.oy,
       oscale: o.oscale,
+      animate: o.animate,
+      ox2: o.ox2,
+      oy2: o.oy2,
     }];
   });
 

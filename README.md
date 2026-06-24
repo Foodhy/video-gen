@@ -101,7 +101,9 @@ Right-click a video clip → *Send to overlay (V2 / PiP)*. The clip moves to a V
 track and composites over the main video as picture-in-picture. Details shows
 X / Y / scale sliders; live second-video preview on the player; export composites
 via ffmpeg `overlay` + `scale` with per-overlay timing (`enable`). Snapping,
-undo, and persistence apply.
+undo, and persistence apply. Toggle **Animate position** in Details to slide the
+overlay from its X/Y to an End X/Y across the clip (linear; baked as time
+expressions in the ffmpeg `overlay` x/y on export).
 
 ## Timeline editing aids (built)
 Magnet **snapping** (🧲) — playhead seek and trim edges snap to clip/text edges;

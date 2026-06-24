@@ -24,6 +24,9 @@ export interface Segment {
   ox?: number; // overlay center x 0..1 (overlay track only)
   oy?: number; // overlay center y 0..1
   oscale?: number; // overlay width as fraction of frame (0..1)
+  animate?: boolean; // animate overlay position from (ox,oy) -> (ox2,oy2) over the segment
+  ox2?: number; // overlay end center x
+  oy2?: number; // overlay end center y
 }
 
 // Visual effects. Defaults: brightness 0, contrast 1, saturation 1, blur 0.
@@ -108,7 +111,10 @@ interface EditorState {
   duplicateSegment: (id: string) => void;
   moveSegmentBefore: (id: string, beforeId: string | null) => void;
   sendToTrack: (id: string, track: TrackKind) => void;
-  setOverlayTransform: (id: string, patch: { ox?: number; oy?: number; oscale?: number }) => void;
+  setOverlayTransform: (
+    id: string,
+    patch: { ox?: number; oy?: number; oscale?: number; ox2?: number; oy2?: number; animate?: boolean },
+  ) => void;
   toggleMute: (id: string) => void;
   setFade: (id: string, patch: { fadeIn?: number; fadeOut?: number }) => void;
   setXfade: (id: string, secs: number) => void;
@@ -287,6 +293,21 @@ export function placeCaptions(
     }
   }
   return out.sort((a, b) => a.tStart - b.tStart);
+}
+
+// Overlay center position at timeline time t (lerps start->end if animated).
+export function overlayPosAt(
+  seg: PlacedSegment,
+  t: number,
+): { x: number; y: number } {
+  const x0 = seg.ox ?? 0.5;
+  const y0 = seg.oy ?? 0.5;
+  if (!seg.animate) return { x: x0, y: y0 };
+  const p = seg.dur > 0 ? Math.max(0, Math.min(1, (t - seg.start) / seg.dur)) : 0;
+  return {
+    x: x0 + ((seg.ox2 ?? x0) - x0) * p,
+    y: y0 + ((seg.oy2 ?? y0) - y0) * p,
+  };
 }
 
 export function captionAt(placed: PlacedCaption[], t: number): PlacedCaption | null {
@@ -546,18 +567,26 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
   setOverlayTransform: (id, patch) => {
     get().record();
+    const c01 = (v: number) => Math.max(0, Math.min(1, v));
     set((s) => ({
-      segments: s.segments.map((x) =>
-        x.id === id
-          ? {
-              ...x,
-              ox: patch.ox !== undefined ? Math.max(0, Math.min(1, patch.ox)) : x.ox,
-              oy: patch.oy !== undefined ? Math.max(0, Math.min(1, patch.oy)) : x.oy,
-              oscale:
-                patch.oscale !== undefined ? Math.max(0.05, Math.min(1, patch.oscale)) : x.oscale,
-            }
-          : x,
-      ),
+      segments: s.segments.map((x) => {
+        if (x.id !== id) return x;
+        const next = { ...x };
+        if (patch.ox !== undefined) next.ox = c01(patch.ox);
+        if (patch.oy !== undefined) next.oy = c01(patch.oy);
+        if (patch.oscale !== undefined) next.oscale = Math.max(0.05, Math.min(1, patch.oscale));
+        if (patch.ox2 !== undefined) next.ox2 = c01(patch.ox2);
+        if (patch.oy2 !== undefined) next.oy2 = c01(patch.oy2);
+        if (patch.animate !== undefined) {
+          next.animate = patch.animate;
+          // Seed end position from start the first time animation is enabled.
+          if (patch.animate && next.ox2 === undefined) {
+            next.ox2 = next.ox ?? 0.5;
+            next.oy2 = next.oy ?? 0.5;
+          }
+        }
+        return next;
+      }),
     }));
   },
 

@@ -55,6 +55,9 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
       ox: p.ox ?? 0.5,
       oy: p.oy ?? 0.5,
       oscale: p.oscale ?? 0.4,
+      animate: p.animate,
+      ox2: p.ox2,
+      oy2: p.oy2,
     }));
     try {
       const jobId = await startExport(projectId, edl, subs, textItems, overlays);

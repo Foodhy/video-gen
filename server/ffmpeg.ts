@@ -133,6 +133,9 @@ export interface OverlayItem {
   ox: number; // 0..1 center
   oy: number;
   oscale: number; // width fraction of frame
+  animate?: boolean;
+  ox2?: number;
+  oy2?: number;
 }
 
 // Composite picture-in-picture overlays onto a finished base video.
@@ -152,11 +155,22 @@ async function compositeOverlays(
   overlays.forEach((o, i) => {
     const k = i + 1;
     const ow = Math.max(2, Math.round((W * o.oscale) / 2) * 2);
-    const tEnd = o.tStart + (o.out - o.in);
+    const dur = Math.max(0.05, o.out - o.in);
+    const tEnd = o.tStart + dur;
+    // Position expressions (linear interp start->end when animated). Commas escaped for filtergraph.
+    const prog = `clip((t-${o.tStart})/${dur}\\,0\\,1)`;
+    const xExpr =
+      o.animate && o.ox2 !== undefined
+        ? `(${o.ox}+(${o.ox2 - o.ox})*${prog})*W-w/2`
+        : `${o.ox}*W-w/2`;
+    const yExpr =
+      o.animate && o.oy2 !== undefined
+        ? `(${o.oy}+(${o.oy2 - o.oy})*${prog})*H-h/2`
+        : `${o.oy}*H-h/2`;
     filters.push(`[${k}:v]scale=${ow}:-2,setpts=PTS-STARTPTS+${o.tStart}/TB[ov${k}]`);
     const next = `[b${k}]`;
     filters.push(
-      `${base}[ov${k}]overlay=x=${o.ox}*W-w/2:y=${o.oy}*H-h/2:enable='between(t\\,${o.tStart}\\,${tEnd})'${next}`,
+      `${base}[ov${k}]overlay=x=${xExpr}:y=${yExpr}:enable='between(t\\,${o.tStart}\\,${tEnd})'${next}`,
     );
     base = next;
   });

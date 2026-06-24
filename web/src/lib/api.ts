@@ -105,6 +105,9 @@ export interface OverlayExportItem {
   ox: number;
   oy: number;
   oscale: number;
+  animate?: boolean;
+  ox2?: number;
+  oy2?: number;
 }
 
 export async function startExport(

@@ -253,6 +253,43 @@ export default function Details() {
                         />
                       </label>
                     ))}
+                    <label className="fx-check">
+                      <input
+                        type="checkbox"
+                        checked={!!seg.animate}
+                        onChange={(e) => setOverlayTransform(seg.id, { animate: e.target.checked })}
+                      />
+                      Animate position (slide)
+                    </label>
+                    {seg.animate ? (
+                      <>
+                        {(
+                          [
+                            ["End X", "ox2", seg.ox2 ?? seg.ox ?? 0.5],
+                            ["End Y", "oy2", seg.oy2 ?? seg.oy ?? 0.5],
+                          ] as const
+                        ).map(([label, key, val]) => (
+                          <label key={key} className="fx-slider">
+                            <span>
+                              {label} <span className="mono">{(val as number).toFixed(2)}</span>
+                            </span>
+                            <input
+                              type="range"
+                              min={0}
+                              max={1}
+                              step={0.01}
+                              value={val as number}
+                              onChange={(e) =>
+                                setOverlayTransform(seg.id, { [key]: Number(e.target.value) })
+                              }
+                            />
+                          </label>
+                        ))}
+                        <span className="mono" style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                          Slides from X/Y → End X/Y across the clip.
+                        </span>
+                      </>
+                    ) : null}
                   </>
                 ) : null}
 

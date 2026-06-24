@@ -6,6 +6,7 @@ import {
   captionAt,
   locate,
   fxToCss,
+  overlayPosAt,
   timelineDuration,
   type PlacedSegment,
 } from "../state/editor.ts";
@@ -221,8 +222,8 @@ export default function Player() {
               className="overlay-video"
               style={{
                 display: activeOverlay ? "block" : "none",
-                left: (activeOverlay?.seg.ox ?? 0.5) * 100 + "%",
-                top: (activeOverlay?.seg.oy ?? 0.5) * 100 + "%",
+                left: (activeOverlay ? overlayPosAt(activeOverlay.seg, playhead).x : 0.5) * 100 + "%",
+                top: (activeOverlay ? overlayPosAt(activeOverlay.seg, playhead).y : 0.5) * 100 + "%",
                 width: (activeOverlay?.seg.oscale ?? 0.4) * 100 + "%",
               }}
             />
