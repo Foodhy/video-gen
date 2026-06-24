@@ -1,0 +1,552 @@
+import { create } from "zustand";
+import type { ClipMeta } from "../lib/api.ts";
+
+export interface Asset extends ClipMeta {
+  mediaUrl: string;
+  thumbs: string[];
+}
+
+export type TrackKind = "video" | "audio";
+
+// A timeline segment references a portion [in,out] of a source asset.
+// Segments on a track are laid end-to-end in array order, starting at t=0.
+export interface Segment {
+  id: string;
+  clipId: string;
+  track: TrackKind;
+  in: number; // source seconds
+  out: number; // source seconds
+  muted?: boolean; // silence this segment's audio (preview + export)
+  fadeIn?: number; // seconds — fade from black + audio fade-in at segment start
+  fadeOut?: number; // seconds — fade to black + audio fade-out at segment end
+  xfadeAfter?: number; // seconds — crossfade overlap into the next video segment
+}
+
+export interface PlacedSegment extends Segment {
+  start: number; // timeline seconds (computed)
+  dur: number;
+}
+
+// A transcribed subtitle line, in SOURCE time of its clip.
+export interface Caption {
+  id: string;
+  start: number; // source seconds
+  end: number;
+  text: string;
+}
+
+// A caption mapped onto timeline time through the EDL.
+export interface PlacedCaption extends Caption {
+  tStart: number;
+  tEnd: number;
+}
+
+// A free text/title overlay, positioned in timeline time + relative coords.
+export interface TextClip {
+  id: string;
+  text: string;
+  start: number; // timeline seconds
+  end: number;
+  x: number; // 0..1 (center) relative to video box
+  y: number; // 0..1
+  size: number; // px at 1080p reference height
+  color: string; // hex
+}
+
+interface EditorState {
+  projectId: string | null;
+  assets: Record<string, Asset>;
+  segments: Segment[];
+  selectedAssetId: string | null;
+  selectedSegmentId: string | null;
+  playhead: number; // timeline seconds
+  playing: boolean;
+  pxPerSec: number;
+  captions: Record<string, Caption[]>; // keyed by clipId, in source time
+  captionLang: Record<string, string>; // language code per clip's captions
+  texts: TextClip[];
+  selectedTextId: string | null;
+  showCaptions: boolean;
+  logs: LogEntry[];
+  showLogs: boolean;
+  past: HistoryDoc[];
+  future: HistoryDoc[];
+  toast: { msg: string; err?: boolean } | null;
+
+  setProject: (id: string) => void;
+  resetTo: (projectId: string) => void;
+  hydrate: (data: {
+    assets: Asset[];
+    segments?: Segment[];
+    captions?: Record<string, Caption[]>;
+    captionLang?: Record<string, string>;
+    texts?: TextClip[];
+  }) => void;
+  addAsset: (a: Asset) => void;
+  removeAsset: (assetId: string) => void;
+  addSegmentForAsset: (assetId: string) => void;
+  selectAsset: (id: string | null) => void;
+  selectSegment: (id: string | null) => void;
+  splitAtPlayhead: () => void;
+  trimSegment: (id: string, patch: { in?: number; out?: number }) => void;
+  deleteSegment: (id: string) => void;
+  deleteSelected: () => void;
+  duplicateSegment: (id: string) => void;
+  toggleMute: (id: string) => void;
+  setFade: (id: string, patch: { fadeIn?: number; fadeOut?: number }) => void;
+  setXfade: (id: string, secs: number) => void;
+  setPlayhead: (t: number) => void;
+  setPlaying: (p: boolean) => void;
+  setZoom: (px: number) => void;
+  setCaptions: (
+    clipId: string,
+    caps: { start: number; end: number; text: string }[],
+    lang?: string,
+  ) => void;
+  updateCaptionText: (clipId: string, capId: string, text: string) => void;
+  clearCaptions: (clipId: string) => void;
+  toggleCaptions: () => void;
+  addText: () => void;
+  updateText: (id: string, patch: Partial<Omit<TextClip, "id">>) => void;
+  deleteText: (id: string) => void;
+  selectText: (id: string | null) => void;
+  pushLog: (e: Omit<LogEntry, "id" | "ts">) => void;
+  clearLogs: () => void;
+  toggleLogs: () => void;
+  record: () => void; // snapshot current doc into undo history
+  undo: () => void;
+  redo: () => void;
+  showToast: (msg: string, err?: boolean) => void;
+}
+
+export interface HistoryDoc {
+  segments: Segment[];
+  captions: Record<string, Caption[]>;
+  captionLang: Record<string, string>;
+  texts: TextClip[];
+  assets: Record<string, Asset>;
+}
+
+export type LogLevel = "debug" | "info" | "success" | "warn" | "error";
+
+export interface LogEntry {
+  id: number;
+  ts: number; // epoch ms
+  level: LogLevel;
+  source: string; // e.g. "api", "import", "export"
+  msg: string;
+  detail?: string;
+}
+
+let segCounter = 0;
+const segId = () => "seg" + ++segCounter + "_" + Math.random().toString(36).slice(2, 6);
+let logCounter = 0;
+let txtCounter = 0;
+
+// Snapshot only the persistable/undoable doc fields.
+function snapDoc(s: {
+  segments: Segment[];
+  captions: Record<string, Caption[]>;
+  captionLang: Record<string, string>;
+  texts: TextClip[];
+  assets: Record<string, Asset>;
+}): HistoryDoc {
+  return {
+    segments: s.segments,
+    captions: s.captions,
+    captionLang: s.captionLang,
+    texts: s.texts,
+    assets: s.assets,
+  };
+}
+
+export interface EditorDoc {
+  segments: Segment[];
+  captions: Record<string, Caption[]>;
+  captionLang: Record<string, string>;
+  texts: TextClip[];
+}
+
+// Serialize the persistable editor document (excludes media URLs/runtime UI).
+export function serializeDoc(s: {
+  segments: Segment[];
+  captions: Record<string, Caption[]>;
+  captionLang: Record<string, string>;
+  texts: TextClip[];
+}): EditorDoc {
+  return {
+    segments: s.segments,
+    captions: s.captions,
+    captionLang: s.captionLang,
+    texts: s.texts,
+  };
+}
+
+// Lay segments of a track end-to-end and compute start/dur.
+export function placeTrack(segments: Segment[], track: TrackKind): PlacedSegment[] {
+  const onTrack = segments.filter((s) => s.track === track);
+  const out: PlacedSegment[] = [];
+  let t = 0;
+  for (let i = 0; i < onTrack.length; i++) {
+    const s = onTrack[i];
+    const dur = Math.max(0, s.out - s.in);
+    out.push({ ...s, start: t, dur });
+    // Crossfade with next segment overlaps the timeline by the transition duration.
+    const nextDur = onTrack[i + 1] ? onTrack[i + 1].out - onTrack[i + 1].in : 0;
+    const x = i < onTrack.length - 1 ? Math.min(s.xfadeAfter ?? 0, dur, nextDur) : 0;
+    t += dur - x;
+  }
+  return out;
+}
+
+export function trackDuration(segments: Segment[], track: TrackKind): number {
+  return placeTrack(segments, track).reduce((s, p) => s + p.dur, 0);
+}
+
+export function timelineDuration(segments: Segment[]): number {
+  return Math.max(trackDuration(segments, "video"), trackDuration(segments, "audio"), 0);
+}
+
+// Map captions (source time) onto timeline time through the video EDL.
+// A caption shows only while the playhead is over a segment of its clip that
+// actually covers the caption's source range (so cuts hide cut-out captions).
+export function placeCaptions(
+  segments: Segment[],
+  captions: Record<string, Caption[]>,
+): PlacedCaption[] {
+  const placed = placeTrack(segments, "video");
+  const out: PlacedCaption[] = [];
+  for (const seg of placed) {
+    const caps = captions[seg.clipId];
+    if (!caps) continue;
+    for (const c of caps) {
+      const s = Math.max(c.start, seg.in);
+      const e = Math.min(c.end, seg.out);
+      if (e <= s) continue; // caption falls outside this trimmed segment
+      out.push({
+        ...c,
+        tStart: seg.start + (s - seg.in),
+        tEnd: seg.start + (e - seg.in),
+      });
+    }
+  }
+  return out.sort((a, b) => a.tStart - b.tStart);
+}
+
+export function captionAt(placed: PlacedCaption[], t: number): PlacedCaption | null {
+  return placed.find((c) => t >= c.tStart && t < c.tEnd) ?? null;
+}
+
+// Map timeline time -> active placed segment on a track + source time.
+export function locate(
+  placed: PlacedSegment[],
+  t: number,
+): { seg: PlacedSegment; srcTime: number } | null {
+  for (const p of placed) {
+    if (t >= p.start && t < p.start + p.dur) {
+      return { seg: p, srcTime: p.in + (t - p.start) };
+    }
+  }
+  const last = placed[placed.length - 1];
+  if (last && t >= last.start + last.dur && placed.length) {
+    return { seg: last, srcTime: last.out };
+  }
+  return null;
+}
+
+export const useEditor = create<EditorState>((set, get) => ({
+  projectId: null,
+  assets: {},
+  segments: [],
+  selectedAssetId: null,
+  selectedSegmentId: null,
+  playhead: 0,
+  playing: false,
+  captions: {},
+  captionLang: {},
+  texts: [],
+  selectedTextId: null,
+  showCaptions: true,
+  logs: [],
+  showLogs: false,
+  past: [],
+  future: [],
+  pxPerSec: 80,
+  toast: null,
+
+  setProject: (id) => set({ projectId: id }),
+
+  resetTo: (projectId) =>
+    set({
+      projectId,
+      assets: {},
+      segments: [],
+      captions: {},
+      captionLang: {},
+      texts: [],
+      selectedTextId: null,
+      selectedAssetId: null,
+      selectedSegmentId: null,
+      playhead: 0,
+      playing: false,
+      past: [],
+      future: [],
+    }),
+
+  hydrate: ({ assets, segments, captions, captionLang, texts }) =>
+    set({
+      assets: Object.fromEntries(assets.map((a) => [a.id, a])),
+      segments: segments ?? [],
+      captions: captions ?? {},
+      captionLang: captionLang ?? {},
+      texts: texts ?? [],
+      selectedTextId: null,
+      selectedSegmentId: null,
+      selectedAssetId: assets[0]?.id ?? null,
+      playhead: 0,
+      playing: false,
+      past: [],
+      future: [],
+    }),
+
+  addAsset: (a) =>
+    set((s) => ({ assets: { ...s.assets, [a.id]: a }, selectedAssetId: a.id })),
+
+  removeAsset: (assetId) => {
+    get().record();
+    set((s) => {
+      const assets = { ...s.assets };
+      delete assets[assetId];
+      const captions = { ...s.captions };
+      delete captions[assetId];
+      const captionLang = { ...s.captionLang };
+      delete captionLang[assetId];
+      return {
+        assets,
+        captions,
+        captionLang,
+        segments: s.segments.filter((seg) => seg.clipId !== assetId),
+        selectedAssetId: s.selectedAssetId === assetId ? null : s.selectedAssetId,
+        selectedSegmentId: null,
+      };
+    });
+  },
+
+  addSegmentForAsset: (assetId) => {
+    get().record();
+    set((s) => {
+      const a = s.assets[assetId];
+      if (!a) return s;
+      const seg: Segment = {
+        id: segId(),
+        clipId: a.id,
+        track: a.kind,
+        in: 0,
+        out: a.duration,
+      };
+      return { segments: [...s.segments, seg], selectedSegmentId: seg.id };
+    });
+  },
+
+  selectAsset: (id) => set({ selectedAssetId: id }),
+  selectSegment: (id) => set({ selectedSegmentId: id }),
+
+  splitAtPlayhead: () => {
+    const t0 = get().playhead;
+    const placed0 = placeTrack(get().segments, "video");
+    if (!placed0.find((p) => t0 > p.start + 0.02 && t0 < p.start + p.dur - 0.02)) return;
+    get().record();
+    set((s) => {
+      const t = s.playhead;
+      const placed = placeTrack(s.segments, "video");
+      const hit = placed.find((p) => t > p.start + 0.02 && t < p.start + p.dur - 0.02);
+      if (!hit) return s;
+      const cut = hit.in + (t - hit.start);
+      const left: Segment = { ...hit, id: segId(), in: hit.in, out: cut };
+      const right: Segment = { ...hit, id: segId(), in: cut, out: hit.out };
+      const idx = s.segments.findIndex((x) => x.id === hit.id);
+      const next = [...s.segments];
+      next.splice(idx, 1, left, right);
+      return { segments: next, selectedSegmentId: right.id };
+    });
+  },
+
+  trimSegment: (id, patch) =>
+    set((s) => ({
+      segments: s.segments.map((seg) => {
+        if (seg.id !== id) return seg;
+        const ni = patch.in ?? seg.in;
+        const no = patch.out ?? seg.out;
+        // keep at least 0.1s and within source bounds
+        const a = get().assets[seg.clipId];
+        const max = a ? a.duration : no;
+        const inn = Math.max(0, Math.min(ni, no - 0.1));
+        const outt = Math.min(max, Math.max(no, inn + 0.1));
+        return { ...seg, in: inn, out: outt };
+      }),
+    })),
+
+  deleteSegment: (id) => {
+    get().record();
+    set((s) => ({
+      segments: s.segments.filter((x) => x.id !== id),
+      selectedSegmentId: s.selectedSegmentId === id ? null : s.selectedSegmentId,
+    }));
+  },
+
+  deleteSelected: () => {
+    if (!get().selectedSegmentId) return;
+    get().record();
+    set((s) => ({
+      segments: s.segments.filter((x) => x.id !== s.selectedSegmentId),
+      selectedSegmentId: null,
+    }));
+  },
+
+  duplicateSegment: (id) => {
+    get().record();
+    set((s) => {
+      const idx = s.segments.findIndex((x) => x.id === id);
+      if (idx < 0) return s;
+      const copy: Segment = { ...s.segments[idx], id: segId() };
+      const next = [...s.segments];
+      next.splice(idx + 1, 0, copy);
+      return { segments: next, selectedSegmentId: copy.id };
+    });
+  },
+
+  toggleMute: (id) => {
+    get().record();
+    set((s) => ({
+      segments: s.segments.map((x) => (x.id === id ? { ...x, muted: !x.muted } : x)),
+    }));
+  },
+
+  setFade: (id, patch) => {
+    get().record();
+    set((s) => ({
+      segments: s.segments.map((x) => {
+        if (x.id !== id) return x;
+        const dur = x.out - x.in;
+        const clamp = (v: number | undefined) =>
+          v === undefined ? undefined : Math.max(0, Math.min(v, dur));
+        return {
+          ...x,
+          fadeIn: patch.fadeIn !== undefined ? clamp(patch.fadeIn) : x.fadeIn,
+          fadeOut: patch.fadeOut !== undefined ? clamp(patch.fadeOut) : x.fadeOut,
+        };
+      }),
+    }));
+  },
+
+  setXfade: (id, secs) => {
+    get().record();
+    set((s) => ({
+      segments: s.segments.map((x) =>
+        x.id === id ? { ...x, xfadeAfter: Math.max(0, Math.min(secs, x.out - x.in)) } : x,
+      ),
+    }));
+  },
+
+  setPlayhead: (t) => set({ playhead: Math.max(0, t) }),
+  setPlaying: (p) => set({ playing: p }),
+  setZoom: (px) => set({ pxPerSec: Math.max(10, Math.min(400, px)) }),
+
+  setCaptions: (clipId, caps, lang) => {
+    get().record();
+    set((s) => ({
+      captions: {
+        ...s.captions,
+        [clipId]: caps.map((c, i) => ({ id: clipId + "_c" + i, ...c })),
+      },
+      captionLang: lang ? { ...s.captionLang, [clipId]: lang } : s.captionLang,
+      showCaptions: true,
+    }));
+  },
+  updateCaptionText: (clipId, capId, text) =>
+    set((s) => ({
+      captions: {
+        ...s.captions,
+        [clipId]: (s.captions[clipId] ?? []).map((c) => (c.id === capId ? { ...c, text } : c)),
+      },
+    })),
+  clearCaptions: (clipId) => {
+    get().record();
+    set((s) => {
+      const next = { ...s.captions };
+      delete next[clipId];
+      return { captions: next };
+    });
+  },
+  toggleCaptions: () => set((s) => ({ showCaptions: !s.showCaptions })),
+
+  addText: () => {
+    get().record();
+    set((s) => {
+      const total = timelineDuration(s.segments);
+      const start = Math.min(s.playhead, Math.max(0, total - 0.5));
+      const txt: TextClip = {
+        id: "txt" + ++txtCounter + "_" + Math.random().toString(36).slice(2, 6),
+        text: "TITLE",
+        start,
+        end: Math.min(start + 3, total || start + 3),
+        x: 0.5,
+        y: 0.5,
+        size: 64,
+        color: "#F5F0E8",
+      };
+      return { texts: [...s.texts, txt], selectedTextId: txt.id, selectedSegmentId: null };
+    });
+  },
+  updateText: (id, patch) =>
+    set((s) => ({ texts: s.texts.map((t) => (t.id === id ? { ...t, ...patch } : t)) })),
+  deleteText: (id) => {
+    get().record();
+    set((s) => ({
+      texts: s.texts.filter((t) => t.id !== id),
+      selectedTextId: s.selectedTextId === id ? null : s.selectedTextId,
+    }));
+  },
+  selectText: (id) => set({ selectedTextId: id, selectedSegmentId: null }),
+
+  pushLog: (e) =>
+    set((s) => {
+      logCounter += 1;
+      const entry: LogEntry = { id: logCounter, ts: Date.now(), ...e };
+      const logs = s.logs.length >= 500 ? [...s.logs.slice(-499), entry] : [...s.logs, entry];
+      return { logs };
+    }),
+  clearLogs: () => set({ logs: [] }),
+  toggleLogs: () => set((s) => ({ showLogs: !s.showLogs })),
+
+  record: () => set((s) => ({ past: [...s.past, snapDoc(s)].slice(-100), future: [] })),
+  undo: () =>
+    set((s) => {
+      if (!s.past.length) return s;
+      const prev = s.past[s.past.length - 1];
+      return {
+        ...prev,
+        past: s.past.slice(0, -1),
+        future: [snapDoc(s), ...s.future].slice(0, 100),
+        selectedSegmentId: null,
+      };
+    }),
+  redo: () =>
+    set((s) => {
+      if (!s.future.length) return s;
+      const next = s.future[0];
+      return {
+        ...next,
+        past: [...s.past, snapDoc(s)].slice(-100),
+        future: s.future.slice(1),
+        selectedSegmentId: null,
+      };
+    }),
+
+  showToast: (msg, err) => {
+    set({ toast: { msg, err } });
+    setTimeout(() => {
+      if (get().toast?.msg === msg) set({ toast: null });
+    }, 3200);
+  },
+}));

@@ -1,0 +1,22 @@
+import { useEditor, placeTrack, type TrackKind, type PlacedSegment } from "../../state/editor.ts";
+import Clip from "./Clip.tsx";
+
+export default function Track({
+  kind,
+  onClipContext,
+}: {
+  kind: TrackKind;
+  onClipContext?: (placed: PlacedSegment, x: number, y: number) => void;
+}) {
+  const segments = useEditor((s) => s.segments);
+  const placed = placeTrack(segments, kind);
+
+  return (
+    <div className={"tl-track" + (kind === "audio" ? " audio" : "")}>
+      <span className="tl-track-label">{kind === "audio" ? "A1 — Audio" : "V1 — Video"}</span>
+      {placed.map((p) => (
+        <Clip key={p.id} placed={p} onContext={onClipContext} />
+      ))}
+    </div>
+  );
+}

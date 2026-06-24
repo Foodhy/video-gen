@@ -1,0 +1,12 @@
+node_modules/
+dist/
+workspace/
+models/
+.venv/
+*.log
+.DS_Store
+
+.env
+.env.*
+*.pem
+*.key
