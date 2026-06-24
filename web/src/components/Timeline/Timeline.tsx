@@ -322,11 +322,11 @@ export default function Timeline() {
         >
           🗑 Delete{selCount > 1 ? ` (${selCount})` : ""}
         </button>
-        <button className="tl-btn" onClick={() => jumpEdit(-1)} title="Previous edit (,)">
-          ⟸
+        <button className="tl-btn" onClick={() => jumpEdit(-1)} title="Jump to previous edit (,)">
+          ⇤ Prev
         </button>
-        <button className="tl-btn" onClick={() => jumpEdit(1)} title="Next edit (.)">
-          ⟹
+        <button className="tl-btn" onClick={() => jumpEdit(1)} title="Jump to next edit (.)">
+          Next ⇥
         </button>
         <button
           className={"tl-btn" + (snapEnabled ? " on" : "")}
