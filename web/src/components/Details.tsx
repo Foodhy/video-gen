@@ -54,6 +54,14 @@ export default function Details() {
   const updateText = useEditor((s) => s.updateText);
   const deleteText = useEditor((s) => s.deleteText);
   const selText = texts.find((t) => t.id === selectedTextId);
+  const textComponents = useEditor((s) => s.textComponents);
+  const selectedComponentId = useEditor((s) => s.selectedComponentId);
+  const updateTextComponent = useEditor((s) => s.updateTextComponent);
+  const toggleTextLock = useEditor((s) => s.toggleTextLock);
+  const deleteTextComponent = useEditor((s) => s.deleteTextComponent);
+  const addTextChild = useEditor((s) => s.addTextChild);
+  const playhead = useEditor((s) => s.playhead);
+  const selComp = textComponents.find((c) => c.id === selectedComponentId);
   const showToast = useEditor((s) => s.showToast);
 
   useEffect(() => {
@@ -134,9 +142,81 @@ export default function Details() {
         <span className="label">Details — {asset ? asset.kind : "Inspector"}</span>
       </div>
       <div className="panel-body">
-        {selText ? (
+        {selComp ? (
           <div className="text-edit-panel">
-            <span className="label">Text — overlay</span>
+            <span className="label">Text component — {selComp.name}</span>
+            <input
+              className="select-line"
+              value={selComp.name}
+              onFocus={() => useEditor.getState().record()}
+              onChange={(e) => updateTextComponent(selComp.id, { name: e.target.value })}
+            />
+            <span className="mono" style={{ fontSize: 10, color: "var(--text-muted)" }}>
+              Placeholder text (does not change children):
+            </span>
+            <textarea
+              className="text-edit-area"
+              rows={2}
+              value={selComp.text}
+              onFocus={() => useEditor.getState().record()}
+              onChange={(e) => updateTextComponent(selComp.id, { text: e.target.value })}
+            />
+            <div className="fade-row">
+              <label>
+                <span>Size {selComp.locks.size ? "🔒" : ""}</span>
+                <input
+                  type="number"
+                  min={8}
+                  max={400}
+                  step={2}
+                  value={selComp.size}
+                  onChange={(e) => updateTextComponent(selComp.id, { size: Number(e.target.value) })}
+                />
+              </label>
+              <label>
+                <span>Color {selComp.locks.color ? "🔒" : ""}</span>
+                <input
+                  type="color"
+                  value={selComp.color}
+                  onChange={(e) => updateTextComponent(selComp.id, { color: e.target.value })}
+                />
+              </label>
+            </div>
+            <span className="mono" style={{ fontSize: 10, color: "var(--text-muted)" }}>
+              Locked props stay per-child; unlocked props propagate to all children.
+            </span>
+            <div className="fade-row">
+              <button
+                className={"fx-preset" + (selComp.locks.size ? " on" : "")}
+                onClick={() => toggleTextLock(selComp.id, "size")}
+              >
+                {selComp.locks.size ? "🔒 Size" : "🔓 Size"}
+              </button>
+              <button
+                className={"fx-preset" + (selComp.locks.color ? " on" : "")}
+                onClick={() => toggleTextLock(selComp.id, "color")}
+              >
+                {selComp.locks.color ? "🔒 Color" : "🔓 Color"}
+              </button>
+            </div>
+            <div className="detail-actions">
+              <button className="btn-line" onClick={() => addTextChild(selComp.id, playhead)}>
+                ＋ Place child at playhead
+              </button>
+              <button
+                className="btn-line"
+                onClick={() => deleteTextComponent(selComp.id)}
+                style={{ borderColor: "#b04a4a", color: "#e08a8a" }}
+              >
+                🗑 Delete component
+              </button>
+            </div>
+          </div>
+        ) : selText ? (
+          <div className="text-edit-panel">
+            <span className="label">
+              Text — {selText.componentId ? "child (of a component)" : "overlay"}
+            </span>
             <textarea
               className="text-edit-area"
               value={selText.text}

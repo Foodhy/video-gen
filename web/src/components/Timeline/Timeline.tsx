@@ -41,11 +41,28 @@ export default function Timeline() {
   const addSegmentAt = useEditor((s) => s.addSegmentAt);
   const sendToTrack = useEditor((s) => s.sendToTrack);
 
-  // Accept media dragged from the library → drop it where you release it.
+  const addTextChild = useEditor((s) => s.addTextChild);
+
+  // Accept media or text-components dragged from the library.
   function onTimelineDragOver(e: React.DragEvent) {
-    if (e.dataTransfer.types.includes("application/x-asset-id")) e.preventDefault();
+    const t = e.dataTransfer.types;
+    if (t.includes("application/x-asset-id") || t.includes("application/x-textcomp")) e.preventDefault();
+  }
+  function dropStart(e: React.DragEvent): number {
+    const el = scrollRef.current;
+    if (!el) return 0;
+    const rect = el.getBoundingClientRect();
+    let s = Math.max(0, (e.clientX - rect.left + el.scrollLeft) / pxPerSec);
+    if (snapEnabled) s = snapValue(s, snapPoints, 8 / pxPerSec);
+    return s;
   }
   function onTimelineDrop(e: React.DragEvent) {
+    const compId = e.dataTransfer.getData("application/x-textcomp");
+    if (compId) {
+      e.preventDefault();
+      addTextChild(compId, dropStart(e));
+      return;
+    }
     const id = e.dataTransfer.getData("application/x-asset-id");
     if (!id) return;
     e.preventDefault();
@@ -109,18 +126,33 @@ export default function Timeline() {
   const updateText = useEditor((s) => s.updateText);
   const setCaptionTiming = useEditor((s) => s.setCaptionTiming);
   const record = useEditor((s) => s.record);
+  type Side = "move" | "l" | "r";
   const blockDrag = useRef<
-    | { kind: "cap"; clipId: string; capId: string; startX: number; s0: number; e0: number }
-    | { kind: "text"; id: string; startX: number; s0: number; e0: number }
+    | { kind: "cap"; side: Side; clipId: string; capId: string; startX: number; s0: number; e0: number }
+    | { kind: "text"; side: Side; id: string; startX: number; s0: number; e0: number }
     | null
   >(null);
 
+  function startBlockDrag(e: React.PointerEvent, side: Side, payload: any) {
+    e.stopPropagation();
+    record();
+    blockDrag.current = { side, startX: e.clientX, ...payload };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }
   function onBlockMove(e: React.PointerEvent) {
     const d = blockDrag.current;
     if (!d) return;
     const dt = (e.clientX - d.startX) / pxPerSec;
-    if (d.kind === "cap") setCaptionTiming(d.clipId, d.capId, d.s0 + dt, d.e0 + dt);
-    else updateText(d.id, { start: Math.max(0, d.s0 + dt), end: Math.max(0.05, d.e0 + dt) });
+    // middle = move both edges; left/right handle = resize one edge
+    let ns = d.s0;
+    let ne = d.e0;
+    if (d.side === "move") {
+      ns = d.s0 + dt;
+      ne = d.e0 + dt;
+    } else if (d.side === "l") ns = d.s0 + dt;
+    else ne = d.e0 + dt;
+    if (d.kind === "cap") setCaptionTiming(d.clipId, d.capId, ns, ne);
+    else updateText(d.id, { start: Math.max(0, ns), end: Math.max(Math.max(0, ns) + 0.05, ne) });
   }
   function onBlockUp(e: React.PointerEvent) {
     if (blockDrag.current) (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
@@ -442,17 +474,30 @@ export default function Timeline() {
                   key={c.id}
                   className="seg caption-seg"
                   style={{ left: c.tStart * pxPerSec, width: Math.max(2, (c.tEnd - c.tStart) * pxPerSec) }}
-                  title={c.text + " — drag to move timing"}
-                  onPointerDown={(e) => {
-                    if (e.button !== 0) return;
-                    e.stopPropagation();
-                    record();
-                    blockDrag.current = { kind: "cap", clipId: c.clipId, capId: c.id, startX: e.clientX, s0: c.start, e0: c.end };
-                    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-                  }}
+                  title={c.text + " — drag middle to move · edges to resize"}
+                  onPointerDown={(e) =>
+                    e.button === 0 &&
+                    startBlockDrag(e, "move", { kind: "cap", clipId: c.clipId, capId: c.id, s0: c.start, e0: c.end })
+                  }
                   onPointerMove={onBlockMove}
                   onPointerUp={onBlockUp}
                 >
+                  <div
+                    className="handle l"
+                    onPointerDown={(e) =>
+                      startBlockDrag(e, "l", { kind: "cap", clipId: c.clipId, capId: c.id, s0: c.start, e0: c.end })
+                    }
+                    onPointerMove={onBlockMove}
+                    onPointerUp={onBlockUp}
+                  />
+                  <div
+                    className="handle r"
+                    onPointerDown={(e) =>
+                      startBlockDrag(e, "r", { kind: "cap", clipId: c.clipId, capId: c.id, s0: c.start, e0: c.end })
+                    }
+                    onPointerMove={onBlockMove}
+                    onPointerUp={onBlockUp}
+                  />
                   <span className="cap-text">{c.text}</span>
                 </div>
               ))}
@@ -470,14 +515,11 @@ export default function Timeline() {
                     left: t.start * pxPerSec,
                     width: Math.max(2, (t.end - t.start) * pxPerSec),
                   }}
-                  title={t.text + " — drag to move · right-click for options"}
+                  title={t.text + " — drag middle to move · edges to resize · right-click for options"}
                   onPointerDown={(e) => {
                     if (e.button !== 0) return;
-                    e.stopPropagation();
                     selectText(t.id);
-                    record();
-                    blockDrag.current = { kind: "text", id: t.id, startX: e.clientX, s0: t.start, e0: t.end };
-                    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                    startBlockDrag(e, "move", { kind: "text", id: t.id, s0: t.start, e0: t.end });
                   }}
                   onPointerMove={onBlockMove}
                   onPointerUp={onBlockUp}
@@ -492,6 +534,18 @@ export default function Timeline() {
                     setTextMenu({ x: e.clientX, y: e.clientY, id: t.id });
                   }}
                 >
+                  <div
+                    className="handle l"
+                    onPointerDown={(e) => startBlockDrag(e, "l", { kind: "text", id: t.id, s0: t.start, e0: t.end })}
+                    onPointerMove={onBlockMove}
+                    onPointerUp={onBlockUp}
+                  />
+                  <div
+                    className="handle r"
+                    onPointerDown={(e) => startBlockDrag(e, "r", { kind: "text", id: t.id, s0: t.start, e0: t.end })}
+                    onPointerMove={onBlockMove}
+                    onPointerUp={onBlockUp}
+                  />
                   <span className="cap-text">T · {t.text}</span>
                 </div>
               ))}

@@ -914,6 +914,13 @@ body {
   align-items: center;
   padding: 0 8px;
 }
+.caption-seg:hover .handle,
+.text-seg:hover .handle {
+  opacity: 0.85;
+}
+.caption-seg {
+  cursor: grab;
+}
 .caption-seg .cap-text {
   font-size: 9px;
   color: var(--accent-0);
@@ -1181,6 +1188,16 @@ body {
 .fx-preset:hover {
   border-color: var(--accent-0);
   color: var(--accent-0);
+}
+.fx-preset.on {
+  border-color: var(--accent-0);
+  color: var(--accent-0);
+}
+.textcomp-section {
+  margin-top: 14px;
+}
+.media-item.textcomp .thumb {
+  aspect-ratio: 16 / 9;
 }
 .fx-slider {
   display: flex;

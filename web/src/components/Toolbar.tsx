@@ -22,7 +22,7 @@ export default function Toolbar({ onExport }: { onExport: () => void }) {
   const canUndo = useEditor((s) => s.past.length > 0);
   const canRedo = useEditor((s) => s.future.length > 0);
   const errCount = useEditor((s) => s.logs).filter((l) => l.level === "error").length;
-  const addText = useEditor((s) => s.addText);
+  const createTextComponent = useEditor((s) => s.createTextComponent);
   const previewAutoplay = useEditor((s) => s.previewAutoplay);
   const setPreviewAutoplay = useEditor((s) => s.setPreviewAutoplay);
   const recoverPlayer = useEditor((s) => s.recoverPlayer);
@@ -61,9 +61,8 @@ export default function Toolbar({ onExport }: { onExport: () => void }) {
       ))}
       <button
         className="tool"
-        onClick={addText}
-        disabled={!hasVideo}
-        title="Add a text/title overlay at the playhead"
+        onClick={createTextComponent}
+        title="Create a text component in the library"
       >
         <span className="ic">T</span>
         Text

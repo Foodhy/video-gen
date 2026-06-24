@@ -20,7 +20,13 @@ export default function MediaPanel() {
   const selectAsset = useEditor((s) => s.selectAsset);
   const setPreview = useEditor((s) => s.setPreview);
   const addFolder = useEditor((s) => s.addFolder);
-  const addText = useEditor((s) => s.addText);
+  const textComponents = useEditor((s) => s.textComponents);
+  const selectedComponentId = useEditor((s) => s.selectedComponentId);
+  const createTextComponent = useEditor((s) => s.createTextComponent);
+  const selectComponent = useEditor((s) => s.selectComponent);
+  const addTextChild = useEditor((s) => s.addTextChild);
+  const deleteTextComponent = useEditor((s) => s.deleteTextComponent);
+  const playhead = useEditor((s) => s.playhead);
   const renameFolder = useEditor((s) => s.renameFolder);
   const deleteFolder = useEditor((s) => s.deleteFolder);
   const moveToFolder = useEditor((s) => s.moveToFolder);
@@ -172,6 +178,44 @@ export default function MediaPanel() {
           <span className="import-hint">or drop files here</span>
         </button>
 
+        {/* text components */}
+        {textComponents.length > 0 && (
+          <div className="textcomp-section">
+            <span className="label">Text components</span>
+            <div className="media-grid">
+              {textComponents.map((c) => (
+                <div
+                  key={c.id}
+                  className={"media-item textcomp" + (c.id === selectedComponentId ? " sel" : "")}
+                  draggable
+                  onDragStart={(e) => e.dataTransfer.setData("application/x-textcomp", c.id)}
+                  onClick={() => selectComponent(c.id)}
+                  onDoubleClick={() => addTextChild(c.id, playhead)}
+                  title={`${c.name} — click to edit · double-click / drag to place a child`}
+                >
+                  <button
+                    className="media-del"
+                    title="Delete component"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteTextComponent(c.id);
+                    }}
+                  >
+                    ✕
+                  </button>
+                  <div className="thumb" style={{ display: "grid", placeItems: "center" }}>
+                    <span className="display" style={{ fontSize: 20, color: c.color }}>
+                      T
+                    </span>
+                  </div>
+                  <div className="nm">{c.name}</div>
+                  <div className="kind">text</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* folders */}
         {folders.map((f) => {
           const items = Object.values(assets).filter((a) => folderOf[a.id] === f.id);
@@ -238,7 +282,7 @@ export default function MediaPanel() {
             { label: "+ Import media…", onClick: () => fileRef.current?.click() },
             { label: "+ New folder", onClick: () => addFolder() },
             { separator: true, label: "" },
-            { label: "+ Add text overlay", onClick: () => addText() },
+            { label: "+ New text component", onClick: () => createTextComponent() },
           ]}
           onClose={() => setBgMenu(null)}
         />
