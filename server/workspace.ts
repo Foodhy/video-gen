@@ -86,6 +86,7 @@ export interface ProjectSummary {
   createdAt: number;
   clipCount: number;
   name: string; // first clip name, or "Untitled"
+  dir: string; // absolute storage path
 }
 
 // List all projects, newest first.
@@ -103,6 +104,7 @@ export async function listProjects(): Promise<ProjectSummary[]> {
         createdAt: p.createdAt ?? (await stat(meta)).mtimeMs,
         clipCount: p.clips.length,
         name: p.clips.find((c) => c.kind === "video")?.name ?? p.clips[0]?.name ?? "Untitled",
+        dir: projectDir(id),
       });
     } catch {
       /* skip corrupt project.json */

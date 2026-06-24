@@ -141,12 +141,19 @@ export interface ProjectSummary {
   createdAt: number;
   clipCount: number;
   name: string;
+  dir: string;
 }
 
-export async function listProjects(): Promise<ProjectSummary[]> {
+export async function listProjects(): Promise<{ projects: ProjectSummary[]; root: string }> {
   const res = await apiFetch("/api/projects");
-  if (!res.ok) return [];
-  return (await res.json()).projects ?? [];
+  if (!res.ok) return { projects: [], root: "" };
+  const j = await res.json();
+  return { projects: j.projects ?? [], root: j.root ?? "" };
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  const res = await apiFetch("/api/project/" + id, { method: "DELETE" });
+  if (!res.ok) throw new Error("delete project failed");
 }
 
 export async function createProject(): Promise<string> {

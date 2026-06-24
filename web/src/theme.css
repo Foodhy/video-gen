@@ -248,22 +248,49 @@ body {
 .proj-item {
   width: 100%;
   display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--line);
+}
+.proj-item.cur {
+  border-left: 2px solid var(--accent-0);
+}
+.pi-open {
+  flex: 1;
+  display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
   background: transparent;
   border: none;
-  border-bottom: 1px solid var(--line);
   color: var(--text-0);
-  padding: 10px 14px;
+  padding: 10px 12px;
   cursor: pointer;
   text-align: left;
 }
-.proj-item:hover {
+.pi-open:hover {
   background: var(--bg-2);
 }
-.proj-item.cur {
-  border-left: 2px solid var(--accent-0);
+.pi-del {
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--line);
+  color: var(--text-muted);
+  padding: 0 12px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.pi-del:hover {
+  color: #fff;
+  background: #b04a4a;
+}
+.proj-footer {
+  padding: 8px 12px;
+  font-size: 9px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--line);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .pi-name {
   font-size: 12px;

@@ -3,7 +3,7 @@ import { mkdir, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import {
   createProject, loadProject, saveProject, resolveMedia, newClipId, listProjects,
-  sourceDir, derivedDir, thumbsDir, outputDir, projectDir,
+  sourceDir, derivedDir, thumbsDir, outputDir, projectDir, ROOT,
   type ClipMeta,
 } from "./workspace.ts";
 import {
@@ -71,7 +71,7 @@ const server = Bun.serve({
       }
 
       if (path === "/api/projects" && req.method === "GET") {
-        return json({ projects: await listProjects() });
+        return json({ projects: await listProjects(), root: ROOT });
       }
 
       if (path === "/api/import" && req.method === "POST") {
@@ -104,6 +104,12 @@ const server = Bun.serve({
       }
 
       const projMatch = path.match(/^\/api\/project\/([^/]+)$/);
+      if (projMatch && req.method === "DELETE") {
+        const dir = projectDir(projMatch[1]);
+        if (!existsSync(dir)) return bad("project not found", 404);
+        await rm(dir, { recursive: true, force: true });
+        return json({ ok: true });
+      }
       if (projMatch && req.method === "GET") {
         const project = await loadProject(projMatch[1]);
         if (!project) return bad("project not found", 404);
