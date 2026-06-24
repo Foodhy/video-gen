@@ -842,6 +842,8 @@ export const useEditor = create<EditorState>((set, get) => ({
       },
     })),
   splitCaptionByWords: (clipId, capId, k) => {
+    const { segments, captions, playhead: t } = get();
+    const placed = placeCaptions(segments, captions).find((c) => c.id === capId);
     get().record();
     set((s) => {
       const arr = s.captions[clipId] ?? [];
@@ -851,7 +853,13 @@ export const useEditor = create<EditorState>((set, get) => ({
       const words = orig.text.trim().split(/\s+/).filter(Boolean);
       if (words.length < 2 || k < 1 || k >= words.length) return s;
       const dur = orig.end - orig.start;
-      const cut = orig.start + (dur * k) / words.length; // remaining time goes to the 2nd
+      // Cut TIME at the playhead (where you are on the timeline); fall back to the
+      // word fraction if the playhead is outside the caption.
+      let cut =
+        placed && t > placed.tStart && t < placed.tEnd
+          ? orig.start + (t - placed.tStart)
+          : orig.start + (dur * k) / words.length;
+      cut = Math.max(orig.start + 0.05, Math.min(orig.end - 0.05, cut));
       const rnd = Math.random().toString(36).slice(2, 6);
       const left = { ...orig, id: orig.id + "_" + rnd + "a", end: cut, text: words.slice(0, k).join(" ") };
       const right = { ...orig, id: orig.id + "_" + rnd + "b", start: cut, text: words.slice(k).join(" ") };
