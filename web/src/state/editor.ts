@@ -625,9 +625,19 @@ export const useEditor = create<EditorState>((set, get) => ({
         if (idx < 0) continue;
         const orig = arr[idx];
         const cut = orig.start + (t - c.tStart); // source-time cut
+        // Split the text by words at the same fraction, so each half gets its part.
+        const frac = c.tEnd > c.tStart ? (t - c.tStart) / (c.tEnd - c.tStart) : 0.5;
+        const words = orig.text.trim().split(/\s+/).filter(Boolean);
+        let leftText = orig.text;
+        let rightText = orig.text;
+        if (words.length > 1) {
+          const k = Math.max(1, Math.min(words.length - 1, Math.round(words.length * frac)));
+          leftText = words.slice(0, k).join(" ");
+          rightText = words.slice(k).join(" ");
+        }
         const rnd = Math.random().toString(36).slice(2, 6);
-        const left = { ...orig, id: orig.id + "_" + rnd + "a", end: cut };
-        const right = { ...orig, id: orig.id + "_" + rnd + "b", start: cut };
+        const left = { ...orig, id: orig.id + "_" + rnd + "a", end: cut, text: leftText };
+        const right = { ...orig, id: orig.id + "_" + rnd + "b", start: cut, text: rightText };
         const next = [...arr];
         next.splice(idx, 1, left, right);
         caps[c.clipId] = next;
