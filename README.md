@@ -36,6 +36,9 @@ or `bun run start`. The launcher:
 It then runs at **http://localhost:8787**. Knobs:
 - `PORT=9000 ./start.sh` — change the port.
 - `SKIP_BUILD=1 ./start.sh` — reuse the last build (faster restart).
+- `FORCE_KILL=1 ./start.sh` — free the port if a stale instance holds it.
+
+Stop everything (server + dev watchers + Vite): `./stop.sh` (or `bun run stop`).
 
 ### Dev mode (hot reload)
 ```

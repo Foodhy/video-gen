@@ -9,6 +9,7 @@
     "dev:web": "vite",
     "build": "vite build",
     "start": "bash start.sh",
+    "stop": "bash stop.sh",
     "serve": "bun server/index.ts",
     "test": "bun test",
     "preview": "vite preview"
