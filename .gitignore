@@ -4,6 +4,7 @@ workspace/
 models/
 .venv/
 .tmp-test/
+.tmp-test-srv/
 *.log
 .DS_Store
 

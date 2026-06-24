@@ -183,3 +183,95 @@ test("sendToTrack to overlay seeds default transform", () => {
   expect(s.track).toBe("overlay");
   expect(s.oscale).toBeGreaterThan(0);
 });
+
+// ---------- separate-audio / multi-track integrity (regression) ----------
+
+test("adding a separated audio track leaves the video timeline intact", () => {
+  const s = useEditor.getState();
+  s.addAsset(asset("v", 5, "video"));
+  s.addSegmentForAsset("v");
+  // separate-audio UI flow: add derived audio asset + its segment
+  s.addAsset(asset("v_audio", 5, "audio"));
+  s.addSegmentForAsset("v_audio");
+
+  const st = useEditor.getState();
+  expect(placeTrack(st.segments, "video").map((p) => [p.start, p.dur])).toEqual([[0, 5]]);
+  expect(placeTrack(st.segments, "audio").map((p) => [p.start, p.dur])).toEqual([[0, 5]]);
+  // video track duration unchanged; total = max(5,5)
+  expect(timelineDuration(st.segments)).toBe(5);
+  // export EDL is the video spine only and is still valid
+  const edl = placeTrack(st.segments, "video");
+  expect(edl.every((p) => p.out > p.in)).toBe(true);
+});
+
+test("splitting video after separate-audio does not touch the audio track", () => {
+  const s = useEditor.getState();
+  s.addAsset(asset("v", 6, "video"));
+  s.addSegmentForAsset("v");
+  s.addAsset(asset("v_audio", 6, "audio"));
+  s.addSegmentForAsset("v_audio");
+  s.setPlayhead(2);
+  s.splitAtPlayhead();
+  const st = useEditor.getState();
+  expect(placeTrack(st.segments, "video")).toHaveLength(2);
+  expect(placeTrack(st.segments, "audio")).toHaveLength(1); // untouched
+});
+
+test("removeAsset of the audio drops only audio segments", () => {
+  const s = useEditor.getState();
+  s.addAsset(asset("v", 5, "video"));
+  s.addSegmentForAsset("v");
+  s.addAsset(asset("v_audio", 5, "audio"));
+  s.addSegmentForAsset("v_audio");
+  s.removeAsset("v_audio");
+  const st = useEditor.getState();
+  expect(placeTrack(st.segments, "video")).toHaveLength(1);
+  expect(placeTrack(st.segments, "audio")).toHaveLength(0);
+  expect(st.assets["v_audio"]).toBeUndefined();
+});
+
+test("removeAsset of the video drops its segments but keeps the audio track", () => {
+  const s = useEditor.getState();
+  s.addAsset(asset("v", 5, "video"));
+  s.addSegmentForAsset("v");
+  s.addAsset(asset("v_audio", 5, "audio"));
+  s.addSegmentForAsset("v_audio");
+  s.removeAsset("v");
+  const st = useEditor.getState();
+  expect(placeTrack(st.segments, "video")).toHaveLength(0);
+  expect(placeTrack(st.segments, "audio")).toHaveLength(1);
+  expect(timelineDuration(st.segments)).toBe(5); // audio still defines length
+});
+
+test("zero-duration audio segment never matches locate (no NaN/crash)", () => {
+  const segs = [seg("z", 0, 0, { track: "audio" }), seg("v", 0, 4)];
+  expect(timelineDuration(segs)).toBe(4);
+  expect(locate(placeTrack(segs, "audio"), 0)).toBeNull();
+  expect(buildSnapPoints(segs, []).every((n) => Number.isFinite(n))).toBe(true);
+});
+
+test("reorder only touches segments of the same track", () => {
+  useEditor.setState({
+    segments: [seg("a", 0, 1), seg("b", 0, 1), seg("m", 0, 1, { track: "audio" })],
+  });
+  // move b before a; audio "m" relative order unaffected
+  useEditor.getState().moveSegmentBefore("b", "a");
+  const ids = useEditor.getState().segments.map((s) => s.id);
+  expect(ids.indexOf("b")).toBeLessThan(ids.indexOf("a"));
+  expect(ids).toContain("m");
+});
+
+test("captions stay aligned after a split", () => {
+  const s = useEditor.getState();
+  s.addAsset(asset("v", 10, "video"));
+  s.addSegmentForAsset("v");
+  s.setCaptions("v", [{ start: 1, end: 2, text: "hi" }, { start: 6, end: 7, text: "bye" }]);
+  s.setPlayhead(5);
+  s.splitAtPlayhead(); // v -> [0-5],[5-10]
+  const st = useEditor.getState();
+  const pc = placeCaptions(st.segments, st.captions);
+  // both captions still present, mapped onto timeline at their original times
+  expect(pc.map((c) => c.text).sort()).toEqual(["bye", "hi"]);
+  expect(pc.find((c) => c.text === "hi")!.tStart).toBeCloseTo(1);
+  expect(pc.find((c) => c.text === "bye")!.tStart).toBeCloseTo(6);
+});

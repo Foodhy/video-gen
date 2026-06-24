@@ -356,13 +356,16 @@ export function locate(
   t: number,
 ): { seg: PlacedSegment; srcTime: number } | null {
   for (const p of placed) {
-    if (t >= p.start && t < p.start + p.dur) {
+    if (p.dur > 0 && t >= p.start && t < p.start + p.dur) {
       return { seg: p, srcTime: p.in + (t - p.start) };
     }
   }
-  const last = placed[placed.length - 1];
-  if (last && t >= last.start + last.dur && placed.length) {
-    return { seg: last, srcTime: last.out };
+  // Past the end: clamp to the last NON-degenerate segment (hold its last frame).
+  // Zero-duration segments must never match (would freeze the player).
+  for (let i = placed.length - 1; i >= 0; i--) {
+    if (placed[i].dur > 0) {
+      return t >= placed[i].start + placed[i].dur ? { seg: placed[i], srcTime: placed[i].out } : null;
+    }
   }
   return null;
 }
