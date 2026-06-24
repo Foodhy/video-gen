@@ -66,9 +66,19 @@ test("placeTrack lays segments end-to-end", () => {
   ]);
 });
 
-test("placeTrack subtracts crossfade overlap", () => {
-  const p = placeTrack([seg("a", 0, 3, { xfadeAfter: 1 }), seg("b", 0, 2)], "video");
-  expect(p[1].start).toBe(2); // 3 - 1 overlap
+test("placeTrack honors explicit start (free positioning, gaps allowed)", () => {
+  const p = placeTrack([seg("a", 0, 3, { start: 0 }), seg("b", 0, 2, { start: 5 })], "video");
+  expect(p.map((x) => x.start)).toEqual([0, 5]); // gap between 3 and 5 preserved
+  expect(p[1].dur).toBe(2);
+});
+
+test("placeTrack sorts by start", () => {
+  const p = placeTrack([seg("a", 0, 1, { start: 4 }), seg("b", 0, 1, { start: 0 })], "video");
+  expect(p.map((x) => x.id)).toEqual(["b", "a"]);
+});
+
+test("timelineDuration uses the max clip end (free positions)", () => {
+  expect(timelineDuration([seg("a", 0, 2, { start: 10 })])).toBe(12);
 });
 
 test("timelineDuration is max across tracks", () => {
@@ -273,6 +283,14 @@ test("reorder only touches segments of the same track", () => {
   const ids = useEditor.getState().segments.map((s) => s.id);
   expect(ids.indexOf("b")).toBeLessThan(ids.indexOf("a"));
   expect(ids).toContain("m");
+});
+
+test("setSegmentStart repositions a clip (clamped >=0)", () => {
+  useEditor.setState({ segments: [seg("a", 0, 2, { start: 0 })] });
+  useEditor.getState().setSegmentStart("a", 7);
+  expect(placeTrack(useEditor.getState().segments, "video")[0].start).toBe(7);
+  useEditor.getState().setSegmentStart("a", -3);
+  expect(placeTrack(useEditor.getState().segments, "video")[0].start).toBe(0);
 });
 
 test("marquee multi-select deletes all selected segments", () => {

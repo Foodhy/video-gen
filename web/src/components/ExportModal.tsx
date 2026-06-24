@@ -19,16 +19,23 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
   async function run() {
     if (!projectId) return;
     setStarted(true);
-    const edl = placeTrack(segments, "video").map((p) => ({
-      clipId: p.clipId,
-      in: p.in,
-      out: p.out,
-      muted: !!p.muted,
-      fadeIn: p.fadeIn,
-      fadeOut: p.fadeOut,
-      xfadeAfter: p.xfadeAfter,
-      fx: p.fx,
-    }));
+    // Crossfade is inferred from how much each clip overlaps the next on the
+    // timeline; gaps are compacted (clips render back-to-back in order).
+    const vplaced = placeTrack(segments, "video");
+    const edl = vplaced.map((p, i) => {
+      const next = vplaced[i + 1];
+      const overlap = next ? Math.max(0, p.start + p.dur - next.start) : 0;
+      return {
+        clipId: p.clipId,
+        in: p.in,
+        out: p.out,
+        muted: !!p.muted,
+        fadeIn: p.fadeIn,
+        fadeOut: p.fadeOut,
+        xfadeAfter: overlap,
+        fx: p.fx,
+      };
+    });
     if (!edl.length) {
       setError("No video segments to export.");
       return;

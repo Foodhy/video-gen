@@ -4,12 +4,12 @@ import { useEditor, hasFx, snapValue, type PlacedSegment } from "../../state/edi
 export default function Clip({
   placed,
   onContext,
-  onReorder,
+  onMove,
   snapPoints,
 }: {
   placed: PlacedSegment;
   onContext?: (placed: PlacedSegment, x: number, y: number) => void;
-  onReorder?: (id: string, dropCenterSec: number) => void;
+  onMove?: (id: string, newStartSec: number) => void;
   snapPoints?: number[];
 }) {
   const snapEnabled = useEditor((s) => s.snapEnabled);
@@ -25,8 +25,8 @@ export default function Clip({
   const dragState = useRef<{ side: "l" | "r"; startX: number; in0: number; out0: number } | null>(
     null,
   );
-  const moveRef = useRef<{ startX: number; moved: boolean } | null>(null);
-  const [dragDX, setDragDX] = useState(0);
+  const moveRef = useRef<{ startX: number; start0: number; moved: boolean } | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   const asset = assets[placed.clipId];
   const left = placed.start * pxPerSec;
@@ -70,40 +70,38 @@ export default function Clip({
     }
   }
 
-  // Body drag = reorder within the track.
+  // Body drag = free reposition along the track (snaps in the parent).
   function onBodyDown(e: React.PointerEvent) {
     if (e.button !== 0) return;
     selectSegment(placed.id);
-    moveRef.current = { startX: e.clientX, moved: false };
+    record(); // one undo step per move gesture
+    moveRef.current = { startX: e.clientX, start0: placed.start, moved: false };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
   function onBodyMove(e: React.PointerEvent) {
     const m = moveRef.current;
     if (!m) return;
     const dx = e.clientX - m.startX;
-    if (Math.abs(dx) > 3) m.moved = true;
-    setDragDX(dx);
+    if (Math.abs(dx) > 3 && !m.moved) {
+      m.moved = true;
+      setDragging(true);
+    }
+    if (m.moved) onMove?.(placed.id, m.start0 + dx / pxPerSec);
   }
   function onBodyUp(e: React.PointerEvent) {
-    const m = moveRef.current;
     moveRef.current = null;
     (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
-    if (m?.moved) {
-      const centerSec = (left + dragDX + width / 2) / pxPerSec;
-      onReorder?.(placed.id, centerSec);
-    }
-    setDragDX(0);
+    setDragging(false);
   }
 
   const isAudio = placed.track === "audio";
   const thumbs = asset?.thumbs ?? [];
-  const dragging = !!moveRef.current && dragDX !== 0;
 
   return (
     <div
       className={"seg" + (selected ? " sel" : "") + (isAudio ? " audio" : "") + (dragging ? " dragging" : "")}
       data-segid={placed.id}
-      style={{ left, width, transform: dragDX ? `translateX(${dragDX}px)` : undefined }}
+      style={{ left, width }}
       onPointerDown={onBodyDown}
       onPointerMove={onBodyMove}
       onPointerUp={onBodyUp}

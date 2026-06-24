@@ -89,7 +89,10 @@ export default function Player() {
     const v = videoRef.current;
     if (!v) return;
     const hit = locate(placed, t);
-    if (!hit) return;
+    if (!hit) {
+      if (!v.paused) v.pause(); // in a gap — hold
+      return;
+    }
     const asset = assets[hit.seg.clipId];
     if (!asset) return;
     // When the A1 audio track covers this time, it provides the sound → mute base.
@@ -108,9 +111,10 @@ export default function Player() {
       v.addEventListener("loadedmetadata", onMeta);
       return;
     }
-    if (forceSeek && Math.abs(v.currentTime - hit.srcTime) > 0.25) {
+    if ((forceSeek || playing) && Math.abs(v.currentTime - hit.srcTime) > 0.3) {
       v.currentTime = hit.srcTime;
     }
+    if (playing && v.paused) v.play().catch(() => {});
   }
 
   // Keep the overlay <video> synced to the overlay track (muted PiP layer).
@@ -119,6 +123,7 @@ export default function Player() {
     if (!v) return;
     const hit = locate(overlayPlaced, t);
     if (!hit) {
+      if (!v.paused) v.pause();
       loadedOverlay.current = null;
       return;
     }
@@ -137,7 +142,8 @@ export default function Player() {
       v.addEventListener("loadedmetadata", onMeta);
       return;
     }
-    if (forceSeek && Math.abs(v.currentTime - hit.srcTime) > 0.25) v.currentTime = hit.srcTime;
+    if ((forceSeek || playing) && Math.abs(v.currentTime - hit.srcTime) > 0.3) v.currentTime = hit.srcTime;
+    if (playing && v.paused) v.play().catch(() => {});
   }
 
   // Keep the A1 audio <audio> element synced to the audio track.
@@ -165,7 +171,8 @@ export default function Player() {
       a.addEventListener("loadedmetadata", onMeta);
       return;
     }
-    if (forceSeek && Math.abs(a.currentTime - hit.srcTime) > 0.25) a.currentTime = hit.srcTime;
+    if ((forceSeek || playing) && Math.abs(a.currentTime - hit.srcTime) > 0.3) a.currentTime = hit.srcTime;
+    if (playing && a.paused) a.play().catch(() => {});
   }
 
   // React to scrubbing while paused.
@@ -178,107 +185,38 @@ export default function Player() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playhead, segments.length]);
 
-  // Play/pause the A1 audio alongside the base.
+  // Unified clock-driven playback. The wall clock advances the playhead; media
+  // elements are slaved to it. Works with gaps, audio-only timelines, and lets
+  // you seek while playing (the loop just reads the new playhead next frame).
   useEffect(() => {
-    const a = audioElRef.current;
-    if (!a) return;
-    if (playing) {
-      syncAudio(useEditor.getState().playhead, true);
-      if (locate(audioPlaced, useEditor.getState().playhead)) a.play().catch(() => {});
-    } else a.pause();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing]);
-
-  // Play/pause the overlay alongside the base.
-  useEffect(() => {
-    const v = overlayRef.current;
-    if (!v) return;
-    if (playing) {
-      syncOverlay(useEditor.getState().playhead, true);
-      if (activeOverlay) v.play().catch(() => {});
-    } else v.pause();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing]);
-
-  // Playback loop: read element time -> advance timeline; hop across segments.
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
     if (!playing) {
-      v.pause();
+      videoRef.current?.pause();
+      overlayRef.current?.pause();
+      audioElRef.current?.pause();
       return;
     }
-    syncToTimeline(useEditor.getState().playhead, true);
-    v.play().catch(() => {});
-    let raf = 0;
-    const tick = () => {
-      const cur = useEditor.getState().playhead;
-      const hit = locate(placed, cur);
-      if (hit) {
-        const tlTime = hit.seg.start + (v.currentTime - hit.seg.in);
-        if (v.currentTime >= hit.seg.out - 0.03) {
-          // advance to next segment
-          const next: PlacedSegment | undefined = placed.find(
-            (p) => p.start > hit.seg.start + 0.001,
-          );
-          if (next) {
-            setPlayhead(next.start + 0.001);
-            loadedClip.current = null;
-            syncToTimeline(next.start + 0.001, true);
-          } else {
-            setPlaying(false);
-            setPlayhead(total);
-            return;
-          }
-        } else {
-          v.volume = fadeFactor(hit.seg, tlTime);
-          setPlayhead(tlTime);
-          syncOverlay(tlTime, false);
-          const ov = overlayRef.current;
-          if (ov) {
-            if (locate(overlayPlaced, tlTime)) {
-              if (ov.paused) ov.play().catch(() => {});
-            } else if (!ov.paused) ov.pause();
-          }
-          syncAudio(tlTime, false);
-          const au = audioElRef.current;
-          if (au) {
-            if (locate(audioPlaced, tlTime)) {
-              if (au.paused) au.play().catch(() => {});
-            } else if (!au.paused) au.pause();
-          }
-        }
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing]);
-
-  // Clock-driven playback for timelines with no video track (audio/overlay only).
-  useEffect(() => {
-    if (!playing || placed.length > 0) return; // video-driven loop handles the rest
-    if (audioPlaced.length === 0 && overlayPlaced.length === 0) return;
     let raf = 0;
     let last = performance.now();
-    const step = () => {
+    // align media to current playhead immediately
+    syncToTimeline(useEditor.getState().playhead, true);
+    syncOverlay(useEditor.getState().playhead, true);
+    syncAudio(useEditor.getState().playhead, true);
+    const tick = () => {
       const now = performance.now();
       const t = useEditor.getState().playhead + (now - last) / 1000;
       last = now;
-      if (t >= total) {
-        setPlaying(false);
+      if (total > 0 && t >= total) {
         setPlayhead(total);
+        setPlaying(false);
         return;
       }
       setPlayhead(t);
-      syncAudio(t, false);
+      syncToTimeline(t, false);
       syncOverlay(t, false);
-      const au = audioElRef.current;
-      if (au && locate(audioPlaced, t) && au.paused) au.play().catch(() => {});
-      raf = requestAnimationFrame(step);
+      syncAudio(t, false);
+      raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(step);
+    raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing]);

@@ -16,6 +16,7 @@ export interface Segment {
   track: TrackKind;
   in: number; // source seconds
   out: number; // source seconds
+  start?: number; // explicit timeline position (sec). If unset, stacked after previous.
   muted?: boolean; // silence this segment's audio (preview + export)
   fadeIn?: number; // seconds — fade from black + audio fade-in at segment start
   fadeOut?: number; // seconds — fade to black + audio fade-out at segment end
@@ -119,6 +120,7 @@ interface EditorState {
   deleteSelected: () => void;
   duplicateSegment: (id: string) => void;
   moveSegmentBefore: (id: string, beforeId: string | null) => void;
+  setSegmentStart: (id: string, start: number) => void;
   sendToTrack: (id: string, track: TrackKind) => void;
   setOverlayTransform: (
     id: string,
@@ -230,24 +232,24 @@ export function serializeDoc(s: {
 }
 
 // Lay segments of a track end-to-end and compute start/dur.
+// Place segments on a track. Each segment sits at its explicit `start` when set,
+// otherwise stacked after the running cursor (back-compat for old docs). Result is
+// sorted by start, so clips can be freely positioned with gaps/overlaps.
 export function placeTrack(segments: Segment[], track: TrackKind): PlacedSegment[] {
   const onTrack = segments.filter((s) => s.track === track);
   const out: PlacedSegment[] = [];
-  let t = 0;
-  for (let i = 0; i < onTrack.length; i++) {
-    const s = onTrack[i];
+  let cursor = 0;
+  for (const s of onTrack) {
     const dur = Math.max(0, s.out - s.in);
-    out.push({ ...s, start: t, dur });
-    // Crossfade with next segment overlaps the timeline by the transition duration.
-    const nextDur = onTrack[i + 1] ? onTrack[i + 1].out - onTrack[i + 1].in : 0;
-    const x = i < onTrack.length - 1 ? Math.min(s.xfadeAfter ?? 0, dur, nextDur) : 0;
-    t += dur - x;
+    const start = s.start ?? cursor;
+    out.push({ ...s, start, dur });
+    cursor = start + dur;
   }
-  return out;
+  return out.sort((a, b) => a.start - b.start);
 }
 
 export function trackDuration(segments: Segment[], track: TrackKind): number {
-  return placeTrack(segments, track).reduce((s, p) => s + p.dur, 0);
+  return placeTrack(segments, track).reduce((m, p) => Math.max(m, p.start + p.dur), 0);
 }
 
 // Timeline positions worth snapping to: clip + text edges, plus 0.
@@ -495,6 +497,7 @@ export const useEditor = create<EditorState>((set, get) => ({
         track: a.kind,
         in: 0,
         out: a.duration,
+        start: trackDuration(s.segments, a.kind), // append at the track's current end
       };
       return { segments: [...s.segments, seg], selectedSegmentId: seg.id };
     });
@@ -518,8 +521,8 @@ export const useEditor = create<EditorState>((set, get) => ({
       const hit = placed.find((p) => t > p.start + 0.02 && t < p.start + p.dur - 0.02);
       if (!hit) return s;
       const cut = hit.in + (t - hit.start);
-      const left: Segment = { ...hit, id: segId(), in: hit.in, out: cut };
-      const right: Segment = { ...hit, id: segId(), in: cut, out: hit.out };
+      const left: Segment = { ...hit, id: segId(), in: hit.in, out: cut, start: hit.start };
+      const right: Segment = { ...hit, id: segId(), in: cut, out: hit.out, start: t };
       const idx = s.segments.findIndex((x) => x.id === hit.id);
       const next = [...s.segments];
       next.splice(idx, 1, left, right);
@@ -566,7 +569,12 @@ export const useEditor = create<EditorState>((set, get) => ({
     set((s) => {
       const idx = s.segments.findIndex((x) => x.id === id);
       if (idx < 0) return s;
-      const copy: Segment = { ...s.segments[idx], id: segId() };
+      const orig = s.segments[idx];
+      const copy: Segment = {
+        ...orig,
+        id: segId(),
+        start: (orig.start ?? 0) + (orig.out - orig.in), // place right after the original
+      };
       const next = [...s.segments];
       next.splice(idx + 1, 0, copy);
       return { segments: next, selectedSegmentId: copy.id };
@@ -633,6 +641,11 @@ export const useEditor = create<EditorState>((set, get) => ({
       }),
     }));
   },
+
+  setSegmentStart: (id, start) =>
+    set((s) => ({
+      segments: s.segments.map((x) => (x.id === id ? { ...x, start: Math.max(0, start) } : x)),
+    })),
 
   toggleMute: (id) => {
     get().record();

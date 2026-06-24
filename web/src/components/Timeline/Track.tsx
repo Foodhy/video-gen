@@ -4,12 +4,12 @@ import Clip from "./Clip.tsx";
 export default function Track({
   kind,
   onClipContext,
-  onReorder,
+  onMove,
   snapPoints,
 }: {
   kind: TrackKind;
   onClipContext?: (placed: PlacedSegment, x: number, y: number) => void;
-  onReorder?: (id: string, dropCenterSec: number) => void;
+  onMove?: (id: string, newStartSec: number) => void;
   snapPoints?: number[];
 }) {
   const segments = useEditor((s) => s.segments);
@@ -25,7 +25,7 @@ export default function Track({
           key={p.id}
           placed={p}
           onContext={onClipContext}
-          onReorder={onReorder}
+          onMove={onMove}
           snapPoints={snapPoints}
         />
       ))}

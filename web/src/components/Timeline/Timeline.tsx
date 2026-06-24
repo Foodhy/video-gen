@@ -35,21 +35,36 @@ export default function Timeline() {
   const duplicateSegment = useEditor((s) => s.duplicateSegment);
   const toggleMute = useEditor((s) => s.toggleMute);
   const setFade = useEditor((s) => s.setFade);
-  const setXfade = useEditor((s) => s.setXfade);
   const setFx = useEditor((s) => s.setFx);
   const clearFx = useEditor((s) => s.clearFx);
-  const moveSegmentBefore = useEditor((s) => s.moveSegmentBefore);
+  const setSegmentStart = useEditor((s) => s.setSegmentStart);
   const sendToTrack = useEditor((s) => s.sendToTrack);
   const snapEnabled = useEditor((s) => s.snapEnabled);
   const toggleSnap = useEditor((s) => s.toggleSnap);
   const snapPoints = buildSnapPoints(segments, texts);
 
-  function reorder(id: string, dropCenterSec: number) {
+  // Free reposition with edge snapping (the "click" near other clips' edges).
+  function moveClip(id: string, rawStart: number) {
     const seg = segments.find((x) => x.id === id);
     if (!seg) return;
-    const others = placeTrack(segments, seg.track).filter((p) => p.id !== id);
-    const before = others.find((o) => o.start + o.dur / 2 > dropCenterSec);
-    moveSegmentBefore(id, before?.id ?? null);
+    const dur = seg.out - seg.in;
+    let start = Math.max(0, rawStart);
+    if (snapEnabled) {
+      const thresh = 8 / pxPerSec;
+      const cands = [0];
+      for (const k of ["video", "audio", "overlay"] as const) {
+        for (const p of placeTrack(segments, k)) {
+          if (p.id === id) continue;
+          cands.push(p.start, p.start + p.dur);
+        }
+      }
+      for (const t of texts) cands.push(t.start, t.end);
+      const sStart = snapValue(start, cands, thresh);
+      const sEnd = snapValue(start + dur, cands, thresh);
+      if (sStart !== start) start = sStart;
+      else if (sEnd !== start + dur) start = Math.max(0, sEnd - dur);
+    }
+    setSegmentStart(id, start);
   }
   const projectId = useEditor((s) => s.projectId);
   const assets = useEditor((s) => s.assets);
@@ -250,10 +265,14 @@ export default function Timeline() {
       },
       { separator: true, label: "" },
       {
-        label: seg.xfadeAfter ? "Crossfade next — clear" : "Crossfade with next — 0.5s",
+        label: "Crossfade with next — 0.5s",
         hint: "⤬",
         disabled: !hasNext,
-        onClick: () => setXfade(seg.id, seg.xfadeAfter ? 0 : 0.5),
+        // Overlap the next clip by 0.5s; export turns the overlap into a crossfade.
+        onClick: () => {
+          const next = vids[vIdx + 1];
+          if (next) setSegmentStart(next.id, Math.max(0, seg.start + seg.dur - 0.5));
+        },
       },
       { separator: true, label: "" },
       {
@@ -354,19 +373,19 @@ export default function Timeline() {
           <Track
             kind="overlay"
             onClipContext={(seg, x, y) => setMenu({ x, y, seg })}
-            onReorder={reorder}
+            onMove={moveClip}
             snapPoints={snapPoints}
           />
           <Track
             kind="video"
             onClipContext={(seg, x, y) => setMenu({ x, y, seg })}
-            onReorder={reorder}
+            onMove={moveClip}
             snapPoints={snapPoints}
           />
           <Track
             kind="audio"
             onClipContext={(seg, x, y) => setMenu({ x, y, seg })}
-            onReorder={reorder}
+            onMove={moveClip}
             snapPoints={snapPoints}
           />
 
