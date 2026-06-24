@@ -30,6 +30,11 @@ export default function Timeline() {
   const setPlayhead = useEditor((s) => s.setPlayhead);
   const setZoom = useEditor((s) => s.setZoom);
   const splitAtPlayhead = useEditor((s) => s.splitAtPlayhead);
+  const splitCaptionAtPlayhead = useEditor((s) => s.splitCaptionAtPlayhead);
+  const splitAll = () => {
+    splitAtPlayhead();
+    splitCaptionAtPlayhead();
+  };
   const deleteSelected = useEditor((s) => s.deleteSelected);
   const deleteSegment = useEditor((s) => s.deleteSegment);
   const duplicateSegment = useEditor((s) => s.duplicateSegment);
@@ -166,11 +171,9 @@ export default function Timeline() {
   }
 
   function bgMenuItems(): MenuItem[] {
-    const vids = placeTrack(segments, "video");
-    const insideClip = vids.some((p) => playhead > p.start + 0.02 && playhead < p.start + p.dur - 0.02);
     const allIds = segments.map((s) => s.id);
     return [
-      { label: "Split at playhead", hint: "S", disabled: !insideClip, onClick: () => splitAtPlayhead() },
+      { label: "Split clip + subtitles at playhead", hint: "S", onClick: () => splitAll() },
       { label: "Add text overlay here", onClick: () => addText() },
       { separator: true, label: "" },
       { label: "Select all clips", disabled: !allIds.length, onClick: () => setSelection(allIds) },
@@ -384,7 +387,7 @@ export default function Timeline() {
   return (
     <section className="timeline">
       <div className="tl-toolbar">
-        <button className="tl-btn" onClick={splitAtPlayhead} title="Split at playhead (S)">
+        <button className="tl-btn" onClick={splitAll} title="Split clip + subtitles at playhead (S)">
           ✂ Split
         </button>
         <button

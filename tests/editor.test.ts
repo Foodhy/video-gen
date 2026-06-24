@@ -339,6 +339,19 @@ test("text component: unlocked prop propagates to children, locked does not", ()
   expect(useEditor.getState().texts.every((t) => t.text !== "PARENT")).toBe(true);
 });
 
+test("splitCaptionAtPlayhead cuts a caption into two at the playhead", () => {
+  const s = useEditor.getState();
+  s.addAsset(asset("v", 10, "video"));
+  s.addSegmentForAsset("v");
+  s.setCaptions("v", [{ start: 0, end: 4, text: "hello" }]);
+  s.setPlayhead(2);
+  s.splitCaptionAtPlayhead();
+  const caps = useEditor.getState().captions["v"];
+  expect(caps).toHaveLength(2);
+  expect(caps[0]).toMatchObject({ start: 0, end: 2, text: "hello" });
+  expect(caps[1]).toMatchObject({ start: 2, end: 4, text: "hello" });
+});
+
 test("setCaptionTiming moves a caption and clamps to >=0", () => {
   const s = useEditor.getState();
   s.addAsset(asset("v", 10, "video"));

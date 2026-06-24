@@ -138,6 +138,7 @@ interface EditorState {
   recoverPlayer: () => void;
   requestImport: (kind: "all" | "audio") => void;
   splitAtPlayhead: () => void;
+  splitCaptionAtPlayhead: () => void;
   trimSegment: (id: string, patch: { in?: number; out?: number }) => void;
   deleteSegment: (id: string) => void;
   deleteSelected: () => void;
@@ -606,6 +607,32 @@ export const useEditor = create<EditorState>((set, get) => ({
       const next = [...s.segments];
       next.splice(idx, 1, left, right);
       return { segments: next, selectedSegmentId: right.id };
+    });
+  },
+
+  splitCaptionAtPlayhead: () => {
+    const { segments, captions, playhead: t } = get();
+    const hits = placeCaptions(segments, captions).filter(
+      (c) => t > c.tStart + 0.02 && t < c.tEnd - 0.02,
+    );
+    if (!hits.length) return;
+    get().record();
+    set((s) => {
+      const caps = { ...s.captions };
+      for (const c of hits) {
+        const arr = caps[c.clipId] ?? [];
+        const idx = arr.findIndex((x) => x.id === c.id);
+        if (idx < 0) continue;
+        const orig = arr[idx];
+        const cut = orig.start + (t - c.tStart); // source-time cut
+        const rnd = Math.random().toString(36).slice(2, 6);
+        const left = { ...orig, id: orig.id + "_" + rnd + "a", end: cut };
+        const right = { ...orig, id: orig.id + "_" + rnd + "b", start: cut };
+        const next = [...arr];
+        next.splice(idx, 1, left, right);
+        caps[c.clipId] = next;
+      }
+      return { captions: caps };
     });
   },
 
