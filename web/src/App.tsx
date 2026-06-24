@@ -63,12 +63,21 @@ export default function App() {
       });
   }, []);
 
-  // Persist projectId + debounced autosave of the editor doc.
+  // Persist projectId + debounced autosave — only when the doc actually changes
+  // (skip the 60fps playhead/playing churn during playback).
   useEffect(() => {
     let timer: number | undefined;
+    let lastPid: string | null = null;
+    let prev: unknown[] = [];
     const unsub = useEditor.subscribe((s) => {
-      if (s.projectId) localStorage.setItem(LS_KEY, s.projectId);
+      if (s.projectId && s.projectId !== lastPid) {
+        lastPid = s.projectId;
+        localStorage.setItem(LS_KEY, s.projectId);
+      }
       if (!hydrated.current || !s.projectId) return;
+      const sig = [s.segments, s.captions, s.captionLang, s.texts];
+      if (sig.every((v, i) => v === prev[i])) return; // doc unchanged → ignore
+      prev = sig;
       clearTimeout(timer);
       timer = window.setTimeout(() => {
         saveDoc(s.projectId!, serializeDoc(s)).catch(() => {});
