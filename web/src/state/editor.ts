@@ -69,6 +69,19 @@ export interface TextClip {
   y: number; // 0..1
   size: number; // px at 1080p reference height
   color: string; // hex
+  componentId?: string; // link to a text component (parent)
+}
+
+// A reusable text "component" (parent). Children placed on the timeline inherit
+// its UNLOCKED props (parent edits propagate); locked props stay per-child. The
+// parent's `text` is a placeholder and never propagates.
+export interface TextComponent {
+  id: string;
+  name: string;
+  text: string;
+  size: number;
+  color: string;
+  locks: { size?: boolean; color?: boolean };
 }
 
 interface EditorState {
@@ -80,13 +93,16 @@ interface EditorState {
   selectedIds: string[]; // multi-selection (marquee); selectedSegmentId is the primary
   previewAssetId: string | null; // library asset being previewed standalone in the player
   previewAutoplay: boolean; // setting: auto-play a preview when opened
+  playerNonce: number; // bump to force the player to reload its media elements
   playhead: number; // timeline seconds
   playing: boolean;
   pxPerSec: number;
   captions: Record<string, Caption[]>; // keyed by clipId, in source time
   captionLang: Record<string, string>; // language code per clip's captions
   texts: TextClip[];
+  textComponents: TextComponent[];
   selectedTextId: string | null;
+  selectedComponentId: string | null;
   folders: { id: string; name: string }[]; // media library folders
   folderOf: Record<string, string>; // assetId -> folderId
   snapEnabled: boolean;
@@ -105,6 +121,7 @@ interface EditorState {
     captions?: Record<string, Caption[]>;
     captionLang?: Record<string, string>;
     texts?: TextClip[];
+    textComponents?: TextComponent[];
     folders?: { id: string; name: string }[];
     folderOf?: Record<string, string>;
   }) => void;
@@ -117,6 +134,7 @@ interface EditorState {
   setSelection: (ids: string[]) => void;
   setPreview: (assetId: string | null) => void;
   setPreviewAutoplay: (v: boolean) => void;
+  recoverPlayer: () => void;
   splitAtPlayhead: () => void;
   trimSegment: (id: string, patch: { in?: number; out?: number }) => void;
   deleteSegment: (id: string) => void;
@@ -151,6 +169,12 @@ interface EditorState {
   updateText: (id: string, patch: Partial<Omit<TextClip, "id">>) => void;
   deleteText: (id: string) => void;
   selectText: (id: string | null) => void;
+  createTextComponent: () => void;
+  updateTextComponent: (id: string, patch: Partial<Omit<TextComponent, "id" | "locks">>) => void;
+  toggleTextLock: (id: string, prop: "size" | "color") => void;
+  deleteTextComponent: (id: string) => void;
+  selectComponent: (id: string | null) => void;
+  addTextChild: (componentId: string, start: number) => void;
   toggleSnap: () => void;
   addFolder: () => void;
   renameFolder: (id: string, name: string) => void;
@@ -170,6 +194,7 @@ export interface HistoryDoc {
   captions: Record<string, Caption[]>;
   captionLang: Record<string, string>;
   texts: TextClip[];
+  textComponents: TextComponent[];
   assets: Record<string, Asset>;
 }
 
@@ -195,6 +220,7 @@ function snapDoc(s: {
   captions: Record<string, Caption[]>;
   captionLang: Record<string, string>;
   texts: TextClip[];
+  textComponents: TextComponent[];
   assets: Record<string, Asset>;
 }): HistoryDoc {
   return {
@@ -202,6 +228,7 @@ function snapDoc(s: {
     captions: s.captions,
     captionLang: s.captionLang,
     texts: s.texts,
+    textComponents: s.textComponents,
     assets: s.assets,
   };
 }
@@ -211,6 +238,7 @@ export interface EditorDoc {
   captions: Record<string, Caption[]>;
   captionLang: Record<string, string>;
   texts: TextClip[];
+  textComponents: TextComponent[];
   folders: { id: string; name: string }[];
   folderOf: Record<string, string>;
 }
@@ -221,6 +249,7 @@ export function serializeDoc(s: {
   captions: Record<string, Caption[]>;
   captionLang: Record<string, string>;
   texts: TextClip[];
+  textComponents: TextComponent[];
   folders: { id: string; name: string }[];
   folderOf: Record<string, string>;
 }): EditorDoc {
@@ -229,6 +258,7 @@ export function serializeDoc(s: {
     captions: s.captions,
     captionLang: s.captionLang,
     texts: s.texts,
+    textComponents: s.textComponents,
     folders: s.folders,
     folderOf: s.folderOf,
   };
@@ -406,12 +436,15 @@ export const useEditor = create<EditorState>((set, get) => ({
   previewAssetId: null,
   previewAutoplay:
     typeof localStorage !== "undefined" ? localStorage.getItem("vg:previewAutoplay") !== "0" : true,
+  playerNonce: 0,
   playhead: 0,
   playing: false,
   captions: {},
   captionLang: {},
   texts: [],
+  textComponents: [],
   selectedTextId: null,
+  selectedComponentId: null,
   folders: [],
   folderOf: {},
   snapEnabled: true,
@@ -433,9 +466,11 @@ export const useEditor = create<EditorState>((set, get) => ({
       captions: {},
       captionLang: {},
       texts: [],
+      textComponents: [],
       folders: [],
       folderOf: {},
       selectedTextId: null,
+      selectedComponentId: null,
       selectedAssetId: null,
       selectedSegmentId: null,
       selectedIds: [],
@@ -446,15 +481,17 @@ export const useEditor = create<EditorState>((set, get) => ({
       future: [],
     }),
 
-  hydrate: ({ assets, segments, captions, captionLang, texts, folders, folderOf }) =>
+  hydrate: ({ assets, segments, captions, captionLang, texts, textComponents, folders, folderOf }) =>
     set({
       assets: Object.fromEntries(assets.map((a) => [a.id, a])),
       segments: segments ?? [],
       captions: captions ?? {},
       captionLang: captionLang ?? {},
       texts: texts ?? [],
+      textComponents: textComponents ?? [],
       folders: folders ?? [],
       folderOf: folderOf ?? {},
+      selectedComponentId: null,
       selectedTextId: null,
       selectedSegmentId: null,
       selectedIds: [],
@@ -526,12 +563,19 @@ export const useEditor = create<EditorState>((set, get) => ({
     });
   },
 
-  selectAsset: (id) => set({ selectedAssetId: id }),
+  selectAsset: (id) => set({ selectedAssetId: id, selectedComponentId: null }),
   selectSegment: (id) =>
-    set({ selectedSegmentId: id, selectedIds: id ? [id] : [], selectedTextId: null, previewAssetId: null }),
+    set({
+      selectedSegmentId: id,
+      selectedIds: id ? [id] : [],
+      selectedTextId: null,
+      selectedComponentId: null,
+      previewAssetId: null,
+    }),
   setSelection: (ids) =>
-    set({ selectedIds: ids, selectedSegmentId: ids[0] ?? null, selectedTextId: null }),
+    set({ selectedIds: ids, selectedSegmentId: ids[0] ?? null, selectedTextId: null, selectedComponentId: null }),
   setPreview: (assetId) => set({ previewAssetId: assetId, playing: false }),
+  recoverPlayer: () => set((s) => ({ playerNonce: s.playerNonce + 1, previewAssetId: null })),
   setPreviewAutoplay: (v) => {
     try {
       localStorage.setItem("vg:previewAutoplay", v ? "1" : "0");
@@ -798,7 +842,82 @@ export const useEditor = create<EditorState>((set, get) => ({
       selectedTextId: s.selectedTextId === id ? null : s.selectedTextId,
     }));
   },
-  selectText: (id) => set({ selectedTextId: id, selectedSegmentId: null }),
+  selectText: (id) => set({ selectedTextId: id, selectedSegmentId: null, selectedComponentId: null }),
+
+  createTextComponent: () => {
+    get().record();
+    set((s) => {
+      const comp: TextComponent = {
+        id: "tc" + ++txtCounter + "_" + Math.random().toString(36).slice(2, 6),
+        name: "Text " + (s.textComponents.length + 1),
+        text: "TITLE",
+        size: 64,
+        color: "#F5F0E8",
+        locks: {},
+      };
+      return {
+        textComponents: [...s.textComponents, comp],
+        selectedComponentId: comp.id,
+        selectedTextId: null,
+        selectedSegmentId: null,
+      };
+    });
+  },
+  updateTextComponent: (id, patch) => {
+    get().record();
+    set((s) => {
+      const comp = s.textComponents.find((c) => c.id === id);
+      if (!comp) return s;
+      const next = { ...comp, ...patch };
+      // Propagate UNLOCKED visual props to children; `text` is a placeholder (never propagates).
+      const propagate: Partial<TextClip> = {};
+      if (patch.size !== undefined && !comp.locks.size) propagate.size = next.size;
+      if (patch.color !== undefined && !comp.locks.color) propagate.color = next.color;
+      const texts = Object.keys(propagate).length
+        ? s.texts.map((t) => (t.componentId === id ? { ...t, ...propagate } : t))
+        : s.texts;
+      return { textComponents: s.textComponents.map((c) => (c.id === id ? next : c)), texts };
+    });
+  },
+  toggleTextLock: (id, prop) => {
+    get().record();
+    set((s) => ({
+      textComponents: s.textComponents.map((c) =>
+        c.id === id ? { ...c, locks: { ...c.locks, [prop]: !c.locks[prop] } } : c,
+      ),
+    }));
+  },
+  deleteTextComponent: (id) => {
+    get().record();
+    set((s) => ({
+      textComponents: s.textComponents.filter((c) => c.id !== id),
+      selectedComponentId: s.selectedComponentId === id ? null : s.selectedComponentId,
+    }));
+  },
+  selectComponent: (id) =>
+    set({ selectedComponentId: id, selectedTextId: null, selectedSegmentId: null, previewAssetId: null }),
+  addTextChild: (componentId, start) => {
+    get().record();
+    set((s) => {
+      const comp = s.textComponents.find((c) => c.id === componentId);
+      if (!comp) return s;
+      const total = timelineDuration(s.segments);
+      const st = Math.max(0, Math.min(start, Math.max(0, total - 0.5)));
+      const txt: TextClip = {
+        id: "txt" + ++txtCounter + "_" + Math.random().toString(36).slice(2, 6),
+        text: comp.text,
+        start: st,
+        end: st + 3,
+        x: 0.5,
+        y: 0.5,
+        size: comp.size,
+        color: comp.color,
+        componentId,
+      };
+      return { texts: [...s.texts, txt], selectedTextId: txt.id, selectedComponentId: null };
+    });
+  },
+
   toggleSnap: () => set((s) => ({ snapEnabled: !s.snapEnabled })),
 
   addFolder: () =>

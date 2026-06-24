@@ -50,6 +50,7 @@ export default function ProjectMenu() {
         captions: doc.captions,
         captionLang: doc.captionLang,
         texts: doc.texts,
+        textComponents: doc.textComponents,
         folders: doc.folders,
         folderOf: doc.folderOf,
       });

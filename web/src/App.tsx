@@ -51,6 +51,7 @@ export default function App() {
           captions: doc.captions,
           captionLang: doc.captionLang,
           texts: doc.texts,
+          textComponents: doc.textComponents,
           folders: doc.folders,
           folderOf: doc.folderOf,
         });
@@ -78,7 +79,7 @@ export default function App() {
         localStorage.setItem(LS_KEY, s.projectId);
       }
       if (!hydrated.current || !s.projectId) return;
-      const sig = [s.segments, s.captions, s.captionLang, s.texts, s.folders, s.folderOf];
+      const sig = [s.segments, s.captions, s.captionLang, s.texts, s.textComponents, s.folders, s.folderOf];
       if (sig.every((v, i) => v === prev[i])) return; // doc unchanged → ignore
       prev = sig;
       clearTimeout(timer);

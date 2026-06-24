@@ -130,6 +130,7 @@ test("serializeDoc keeps only persistable fields", () => {
     captions: {},
     captionLang: {},
     texts: [],
+    textComponents: [],
     folders: [],
     folderOf: {},
   });
@@ -139,6 +140,7 @@ test("serializeDoc keeps only persistable fields", () => {
     "folderOf",
     "folders",
     "segments",
+    "textComponents",
     "texts",
   ]);
 });
@@ -312,6 +314,29 @@ test("marquee multi-select deletes all selected segments", () => {
   expect(useEditor.getState().segments.map((s) => s.id)).toEqual(["b"]);
   useEditor.getState().undo();
   expect(useEditor.getState().segments.map((s) => s.id)).toEqual(["a", "b", "c"]);
+});
+
+test("text component: unlocked prop propagates to children, locked does not", () => {
+  const s = useEditor.getState();
+  s.createTextComponent();
+  const comp = useEditor.getState().textComponents[0];
+  s.addTextChild(comp.id, 0);
+  s.addTextChild(comp.id, 0);
+  // unlocked color propagates to children
+  s.updateTextComponent(comp.id, { color: "#FF0000" });
+  expect(useEditor.getState().texts.every((t) => t.color === "#FF0000")).toBe(true);
+  // lock size, then change parent size -> children keep their size
+  s.toggleTextLock(comp.id, "size");
+  const before = useEditor.getState().texts.map((t) => t.size);
+  s.updateTextComponent(comp.id, { size: 200 });
+  expect(useEditor.getState().texts.map((t) => t.size)).toEqual(before); // unchanged
+  // editing a child only changes that child
+  const childId = useEditor.getState().texts[0].id;
+  s.updateText(childId, { text: "child only" });
+  expect(useEditor.getState().texts[1].text).not.toBe("child only");
+  // parent text is a placeholder: changing it never touches children
+  s.updateTextComponent(comp.id, { text: "PARENT" });
+  expect(useEditor.getState().texts.every((t) => t.text !== "PARENT")).toBe(true);
 });
 
 test("setCaptionTiming moves a caption and clamps to >=0", () => {

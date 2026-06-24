@@ -11,10 +11,18 @@ import {
   type PlacedSegment,
 } from "../state/editor.ts";
 import { tc } from "../lib/format.ts";
+import { logger } from "../lib/logger.ts";
 
 export default function Player() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  function toggleFullscreen() {
+    const el = sectionRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else el.requestFullscreen().catch(() => {});
+  }
   const segments = useEditor((s) => s.segments);
   const assets = useEditor((s) => s.assets);
   const playhead = useEditor((s) => s.playhead);
@@ -24,6 +32,7 @@ export default function Player() {
 
   const previewAssetId = useEditor((s) => s.previewAssetId);
   const previewAutoplay = useEditor((s) => s.previewAutoplay);
+  const playerNonce = useEditor((s) => s.playerNonce);
   const setPreview = useEditor((s) => s.setPreview);
   const previewAsset = previewAssetId ? assets[previewAssetId] : null;
   const texts = useEditor((s) => s.texts);
@@ -186,6 +195,26 @@ export default function Player() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playhead, segments.length]);
 
+  // Recover the player when leaving a preview (the base <video> remounts and its
+  // "loaded clip" cache would otherwise be stale -> black frame). Also triggered
+  // by the Settings "Recover player" action. Logs the active media reference.
+  useEffect(() => {
+    loadedClip.current = null;
+    loadedOverlay.current = null;
+    loadedAudio.current = null;
+    const id = requestAnimationFrame(() => {
+      const t = useEditor.getState().playhead;
+      const hit = locate(placed, t);
+      const ref = hit ? assets[hit.seg.clipId]?.mediaUrl : null;
+      logger.info("player", "Player reloaded media", ref ?? "(no clip at playhead)");
+      syncToTimeline(t, true);
+      syncOverlay(t, true);
+      syncAudio(t, true);
+    });
+    return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewAssetId, playerNonce]);
+
   // Unified clock-driven playback. The wall clock advances the playhead; media
   // elements are slaved to it. Works with gaps, audio-only timelines, and lets
   // you seek while playing (the loop just reads the new playhead next frame).
@@ -229,13 +258,22 @@ export default function Player() {
   const seekTo = (t: number) => setPlayhead(Math.max(0, Math.min(t, total)));
 
   return (
-    <section className="panel player">
+    <section className="panel player" ref={sectionRef}>
       <div className="panel-head">
         <span className="label">Player — Preview</span>
+        <span style={{ flex: 1 }} />
         <span className="mono" style={{ fontSize: 10, color: "var(--text-muted)" }}>
           {assets[locate(placed, playhead)?.seg.clipId ?? ""]?.width ?? "—"}×
           {assets[locate(placed, playhead)?.seg.clipId ?? ""]?.height ?? "—"}
         </span>
+        <button
+          className="transport"
+          style={{ marginLeft: 10 }}
+          onClick={toggleFullscreen}
+          title="Fullscreen player (see it bigger)"
+        >
+          ⛶
+        </button>
       </div>
       <div className="player-stage" ref={stageRef}>
         {previewAsset ? (

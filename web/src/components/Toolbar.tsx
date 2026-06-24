@@ -25,6 +25,8 @@ export default function Toolbar({ onExport }: { onExport: () => void }) {
   const addText = useEditor((s) => s.addText);
   const previewAutoplay = useEditor((s) => s.previewAutoplay);
   const setPreviewAutoplay = useEditor((s) => s.setPreviewAutoplay);
+  const recoverPlayer = useEditor((s) => s.recoverPlayer);
+  const showToast = useEditor((s) => s.showToast);
   const [settings, setSettings] = useState<{ x: number; y: number } | null>(null);
   const hasVideo = timelineDuration(segments) > 0;
 
@@ -111,6 +113,24 @@ export default function Toolbar({ onExport }: { onExport: () => void }) {
             {
               label: (previewAutoplay ? "✓ " : "○ ") + "Auto-play preview",
               onClick: () => setPreviewAutoplay(!previewAutoplay),
+            },
+            { separator: true, label: "" },
+            {
+              label: "↻ Recover player (reload media)",
+              onClick: () => {
+                recoverPlayer();
+                showToast("Player reloaded — see Logs for the media reference");
+              },
+            },
+            { separator: true, label: "" },
+            {
+              label: "⛶ Enter fullscreen",
+              onClick: () => document.documentElement.requestFullscreen().catch(() => {}),
+            },
+            {
+              label: "⤡ Exit fullscreen",
+              disabled: typeof document !== "undefined" && !document.fullscreenElement,
+              onClick: () => document.exitFullscreen().catch(() => {}),
             },
           ]}
           onClose={() => setSettings(null)}
