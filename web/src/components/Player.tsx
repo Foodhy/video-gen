@@ -29,8 +29,12 @@ export default function Player() {
   const captions = useEditor((s) => s.captions);
   const showCaptions = useEditor((s) => s.showCaptions);
   const placed = placeTrack(segments, "video");
+  const overlayPlaced = placeTrack(segments, "overlay");
   const total = timelineDuration(segments);
   const loadedClip = useRef<string | null>(null);
+  const overlayRef = useRef<HTMLVideoElement>(null);
+  const loadedOverlay = useRef<string | null>(null);
+  const activeOverlay = locate(overlayPlaced, playhead);
 
   const placedCaps = placeCaptions(segments, captions);
   const activeCap = showCaptions ? captionAt(placedCaps, playhead) : null;
@@ -99,11 +103,52 @@ export default function Player() {
     }
   }
 
+  // Keep the overlay <video> synced to the overlay track (muted PiP layer).
+  function syncOverlay(t: number, forceSeek: boolean) {
+    const v = overlayRef.current;
+    if (!v) return;
+    const hit = locate(overlayPlaced, t);
+    if (!hit) {
+      loadedOverlay.current = null;
+      return;
+    }
+    const asset = assets[hit.seg.clipId];
+    if (!asset) return;
+    if (loadedOverlay.current !== asset.id) {
+      loadedOverlay.current = asset.id;
+      v.src = asset.mediaUrl;
+      v.muted = true;
+      v.load();
+      const onMeta = () => {
+        v.currentTime = hit.srcTime;
+        if (playing) v.play().catch(() => {});
+        v.removeEventListener("loadedmetadata", onMeta);
+      };
+      v.addEventListener("loadedmetadata", onMeta);
+      return;
+    }
+    if (forceSeek && Math.abs(v.currentTime - hit.srcTime) > 0.25) v.currentTime = hit.srcTime;
+  }
+
   // React to scrubbing while paused.
   useEffect(() => {
-    if (!playing) syncToTimeline(playhead, true);
+    if (!playing) {
+      syncToTimeline(playhead, true);
+      syncOverlay(playhead, true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playhead, segments.length]);
+
+  // Play/pause the overlay alongside the base.
+  useEffect(() => {
+    const v = overlayRef.current;
+    if (!v) return;
+    if (playing) {
+      syncOverlay(useEditor.getState().playhead, true);
+      if (activeOverlay) v.play().catch(() => {});
+    } else v.pause();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing]);
 
   // Playback loop: read element time -> advance timeline; hop across segments.
   useEffect(() => {
@@ -138,6 +183,13 @@ export default function Player() {
         } else {
           v.volume = fadeFactor(hit.seg, tlTime);
           setPlayhead(tlTime);
+          syncOverlay(tlTime, false);
+          const ov = overlayRef.current;
+          if (ov) {
+            if (locate(overlayPlaced, tlTime)) {
+              if (ov.paused) ov.play().catch(() => {});
+            } else if (!ov.paused) ov.pause();
+          }
         }
       }
       raf = requestAnimationFrame(tick);
@@ -162,6 +214,18 @@ export default function Player() {
         {hasContent ? (
           <>
             <video ref={videoRef} playsInline style={{ filter: fxToCss(activeHit?.seg.fx) }} />
+            <video
+              ref={overlayRef}
+              playsInline
+              muted
+              className="overlay-video"
+              style={{
+                display: activeOverlay ? "block" : "none",
+                left: (activeOverlay?.seg.ox ?? 0.5) * 100 + "%",
+                top: (activeOverlay?.seg.oy ?? 0.5) * 100 + "%",
+                width: (activeOverlay?.seg.oscale ?? 0.4) * 100 + "%",
+              }}
+            />
             {fade < 1 && (
               <div className="fade-overlay" style={{ opacity: 1 - fade }} />
             )}

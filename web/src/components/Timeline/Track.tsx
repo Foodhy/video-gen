@@ -17,7 +17,9 @@ export default function Track({
 
   return (
     <div className={"tl-track" + (kind === "audio" ? " audio" : "")}>
-      <span className="tl-track-label">{kind === "audio" ? "A1 — Audio" : "V1 — Video"}</span>
+      <span className="tl-track-label">
+        {kind === "audio" ? "A1 — Audio" : kind === "overlay" ? "V2 — Overlay" : "V1 — Video"}
+      </span>
       {placed.map((p) => (
         <Clip
           key={p.id}

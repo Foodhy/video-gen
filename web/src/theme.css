@@ -509,6 +509,19 @@ body {
   color: var(--accent-0);
 }
 
+/* picture-in-picture overlay video */
+.overlay-video {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  max-width: none;
+  max-height: none;
+  height: auto;
+  border: 1px solid rgba(245, 240, 232, 0.4);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+  z-index: 2;
+  pointer-events: none;
+}
+
 /* fade overlay on player (dims toward black during a fade) */
 .fade-overlay {
   position: absolute;

@@ -37,6 +37,7 @@ export default function Timeline() {
   const setFx = useEditor((s) => s.setFx);
   const clearFx = useEditor((s) => s.clearFx);
   const moveSegmentBefore = useEditor((s) => s.moveSegmentBefore);
+  const sendToTrack = useEditor((s) => s.sendToTrack);
   const snapEnabled = useEditor((s) => s.snapEnabled);
   const toggleSnap = useEditor((s) => s.toggleSnap);
   const snapPoints = buildSnapPoints(segments, texts);
@@ -178,6 +179,12 @@ export default function Timeline() {
       },
       { separator: true, label: "" },
       {
+        label: seg.track === "overlay" ? "Send to main track (V1)" : "Send to overlay (V2 / PiP)",
+        disabled: seg.track === "audio",
+        onClick: () => sendToTrack(seg.id, seg.track === "overlay" ? "video" : "overlay"),
+      },
+      { separator: true, label: "" },
+      {
         label: "Separate audio → track",
         disabled: seg.track !== "video" || !asset?.hasAudio,
         onClick: () => separateAudioFor(seg.clipId),
@@ -249,6 +256,12 @@ export default function Timeline() {
             })}
           </div>
 
+          <Track
+            kind="overlay"
+            onClipContext={(seg, x, y) => setMenu({ x, y, seg })}
+            onReorder={reorder}
+            snapPoints={snapPoints}
+          />
           <Track
             kind="video"
             onClipContext={(seg, x, y) => setMenu({ x, y, seg })}

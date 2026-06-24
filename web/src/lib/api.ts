@@ -97,16 +97,27 @@ export interface TextOverlayItem {
   color: string;
 }
 
+export interface OverlayExportItem {
+  clipId: string;
+  in: number;
+  out: number;
+  tStart: number;
+  ox: number;
+  oy: number;
+  oscale: number;
+}
+
 export async function startExport(
   projectId: string,
   edl: ExportEdlItem[],
   burnSubtitles?: CaptionLine[],
   texts?: TextOverlayItem[],
+  overlays?: OverlayExportItem[],
 ): Promise<string> {
   const res = await apiFetch("/api/export", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ projectId, edl, burnSubtitles, texts }),
+    body: JSON.stringify({ projectId, edl, burnSubtitles, texts, overlays }),
   });
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "export failed");
   return (await res.json()).jobId;

@@ -8,7 +8,7 @@ import {
 } from "./workspace.ts";
 import {
   probe, thumbnails, extractAudio, extractAudioRange, render,
-  type EdlSegment, type BurnCaption, type BurnText,
+  type EdlSegment, type BurnCaption, type BurnText, type OverlayItem,
 } from "./ffmpeg.ts";
 import { createJob, getJob, updateJob } from "./jobs.ts";
 import { transcribe, modelAvailable } from "./transcribe.ts";
@@ -300,10 +300,19 @@ interface ExportBody {
   }[];
   burnSubtitles?: BurnCaption[];
   texts?: BurnText[];
+  overlays?: {
+    clipId: string;
+    in: number;
+    out: number;
+    tStart: number;
+    ox: number;
+    oy: number;
+    oscale: number;
+  }[];
 }
 
 async function handleExport(req: Request): Promise<Response> {
-  const { projectId, edl, burnSubtitles, texts } = (await req.json()) as ExportBody;
+  const { projectId, edl, burnSubtitles, texts, overlays } = (await req.json()) as ExportBody;
   const project = await loadProject(projectId);
   if (!project) return bad("project not found", 404);
   if (!edl?.length) return bad("empty timeline");
@@ -327,6 +336,20 @@ async function handleExport(req: Request): Promise<Response> {
   }
   if (!segments.length) return bad("no video segments to export");
 
+  const overlayItems: OverlayItem[] = (overlays ?? []).flatMap((o) => {
+    const clip = project.clips.find((c) => c.id === o.clipId);
+    if (!clip) return [];
+    return [{
+      src: resolveMedia(projectId, clip.file)!,
+      in: o.in,
+      out: o.out,
+      tStart: o.tStart,
+      ox: o.ox,
+      oy: o.oy,
+      oscale: o.oscale,
+    }];
+  });
+
   const job = createJob();
   const stamp = job.id;
   await mkdir(outputDir(projectId), { recursive: true });
@@ -340,7 +363,7 @@ async function handleExport(req: Request): Promise<Response> {
       await render(
         segments, outAbs, tmp,
         (p) => updateJob(job.id, { progress: p }),
-        burnSubtitles, texts,
+        burnSubtitles, texts, overlayItems,
       );
       updateJob(job.id, {
         status: "done",

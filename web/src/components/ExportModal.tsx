@@ -47,8 +47,17 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
           color: t.color,
         }))
       : undefined;
+    const overlays = placeTrack(segments, "overlay").map((p) => ({
+      clipId: p.clipId,
+      in: p.in,
+      out: p.out,
+      tStart: p.start,
+      ox: p.ox ?? 0.5,
+      oy: p.oy ?? 0.5,
+      oscale: p.oscale ?? 0.4,
+    }));
     try {
-      const jobId = await startExport(projectId, edl, subs, textItems);
+      const jobId = await startExport(projectId, edl, subs, textItems, overlays);
       poll.current = window.setInterval(async () => {
         try {
           const j = await getJob(jobId);

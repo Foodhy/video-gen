@@ -48,6 +48,7 @@ export default function Details() {
   const setFx = useEditor((s) => s.setFx);
   const clearFx = useEditor((s) => s.clearFx);
   const applyFxPreset = useEditor((s) => s.applyFxPreset);
+  const setOverlayTransform = useEditor((s) => s.setOverlayTransform);
   const texts = useEditor((s) => s.texts);
   const selectedTextId = useEditor((s) => s.selectedTextId);
   const updateText = useEditor((s) => s.updateText);
@@ -224,6 +225,36 @@ export default function Details() {
                 <Row k="In" v={tc(seg.in)} mono />
                 <Row k="Out" v={tc(seg.out)} mono />
                 <Row k="Length" v={tc(seg.out - seg.in)} mono />
+
+                {seg.track === "overlay" ? (
+                  <>
+                    <div style={{ height: 8 }} />
+                    <span className="label">Overlay — position &amp; size</span>
+                    {(
+                      [
+                        ["X", "ox", 0, 1, 0.01, seg.ox ?? 0.5],
+                        ["Y", "oy", 0, 1, 0.01, seg.oy ?? 0.5],
+                        ["Scale", "oscale", 0.05, 1, 0.01, seg.oscale ?? 0.4],
+                      ] as const
+                    ).map(([label, key, min, max, step, val]) => (
+                      <label key={key} className="fx-slider">
+                        <span>
+                          {label} <span className="mono">{(val as number).toFixed(2)}</span>
+                        </span>
+                        <input
+                          type="range"
+                          min={min}
+                          max={max}
+                          step={step}
+                          value={val as number}
+                          onChange={(e) =>
+                            setOverlayTransform(seg.id, { [key]: Number(e.target.value) })
+                          }
+                        />
+                      </label>
+                    ))}
+                  </>
+                ) : null}
 
                 <div style={{ height: 8 }} />
                 <span className="label">Transitions — fade (sec)</span>

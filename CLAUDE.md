@@ -58,8 +58,9 @@ last project rehydrates from `localStorage` on load.
 
 import · drag-reorder · split/trim (snapping) · separate/extract/mute audio ·
 fade in/out (video+audio) · crossfade between clips · per-clip effects + color
-presets · transcribe (whisper) · translate (argos) · subtitles (overlay + burn) ·
-text/title overlays · undo/redo · in-app Console · project switcher · export mp4.
+presets · V2 overlay / picture-in-picture · transcribe (whisper) · translate
+(argos) · subtitles (overlay + burn) · text/title overlays · undo/redo · in-app
+Console · project switcher · export mp4.
 
 ## Gotchas
 

@@ -95,3 +95,14 @@ and `+ New Project` starts a fresh one. Backed by `GET/POST /api/projects`.
 Per-clip color + blur. Select a segment → Details *Effects*: brightness, contrast, saturation, blur sliders + Black & white toggle (also in the right-click menu). One-click **presets** (Cinematic, Warm, Cold, Vivid, Vintage, Noir, B&W, Dreamy). Live CSS-filter preview on the player; export bakes them via ffmpeg `eq` + `gblur`. Badge `✦` marks a clip with effects. Undoable + persisted.
 
 Clips can be **drag-reordered** on the timeline (drag a clip body; drop position by clip center).
+
+## Multi-track overlay / PiP (built)
+Right-click a video clip → *Send to overlay (V2 / PiP)*. The clip moves to a V2
+track and composites over the main video as picture-in-picture. Details shows
+X / Y / scale sliders; live second-video preview on the player; export composites
+via ffmpeg `overlay` + `scale` with per-overlay timing (`enable`). Snapping,
+undo, and persistence apply.
+
+## Timeline editing aids (built)
+Magnet **snapping** (🧲) — playhead seek and trim edges snap to clip/text edges;
+jump to previous/next edit with `,` / `.`.

@@ -6,7 +6,7 @@ export interface Asset extends ClipMeta {
   thumbs: string[];
 }
 
-export type TrackKind = "video" | "audio";
+export type TrackKind = "video" | "audio" | "overlay";
 
 // A timeline segment references a portion [in,out] of a source asset.
 // Segments on a track are laid end-to-end in array order, starting at t=0.
@@ -21,6 +21,9 @@ export interface Segment {
   fadeOut?: number; // seconds — fade to black + audio fade-out at segment end
   xfadeAfter?: number; // seconds — crossfade overlap into the next video segment
   fx?: Fx; // color/blur effects
+  ox?: number; // overlay center x 0..1 (overlay track only)
+  oy?: number; // overlay center y 0..1
+  oscale?: number; // overlay width as fraction of frame (0..1)
 }
 
 // Visual effects. Defaults: brightness 0, contrast 1, saturation 1, blur 0.
@@ -104,6 +107,8 @@ interface EditorState {
   deleteSelected: () => void;
   duplicateSegment: (id: string) => void;
   moveSegmentBefore: (id: string, beforeId: string | null) => void;
+  sendToTrack: (id: string, track: TrackKind) => void;
+  setOverlayTransform: (id: string, patch: { ox?: number; oy?: number; oscale?: number }) => void;
   toggleMute: (id: string) => void;
   setFade: (id: string, patch: { fadeIn?: number; fadeOut?: number }) => void;
   setXfade: (id: string, secs: number) => void;
@@ -222,7 +227,7 @@ export function trackDuration(segments: Segment[], track: TrackKind): number {
 // Timeline positions worth snapping to: clip + text edges, plus 0.
 export function buildSnapPoints(segments: Segment[], texts: TextClip[]): number[] {
   const pts = new Set<number>([0]);
-  for (const track of ["video", "audio"] as const) {
+  for (const track of ["video", "audio", "overlay"] as const) {
     for (const p of placeTrack(segments, track)) {
       pts.add(+p.start.toFixed(3));
       pts.add(+(p.start + p.dur).toFixed(3));
@@ -250,7 +255,12 @@ export function snapValue(v: number, points: number[], threshold: number): numbe
 }
 
 export function timelineDuration(segments: Segment[]): number {
-  return Math.max(trackDuration(segments, "video"), trackDuration(segments, "audio"), 0);
+  return Math.max(
+    trackDuration(segments, "video"),
+    trackDuration(segments, "audio"),
+    trackDuration(segments, "overlay"),
+    0,
+  );
 }
 
 // Map captions (source time) onto timeline time through the video EDL.
@@ -511,6 +521,44 @@ export const useEditor = create<EditorState>((set, get) => ({
       arr.splice(to, 0, item);
       return { segments: arr, selectedSegmentId: id };
     });
+  },
+
+  sendToTrack: (id, track) => {
+    get().record();
+    set((s) => ({
+      segments: s.segments.map((x) => {
+        if (x.id !== id) return x;
+        const base = { ...x, track };
+        // Give overlays sensible defaults the first time.
+        if (track === "overlay") {
+          return {
+            ...base,
+            ox: x.ox ?? 0.5,
+            oy: x.oy ?? 0.5,
+            oscale: x.oscale ?? 0.4,
+            xfadeAfter: 0, // crossfade not meaningful on overlay
+          };
+        }
+        return base;
+      }),
+      selectedSegmentId: id,
+    }));
+  },
+  setOverlayTransform: (id, patch) => {
+    get().record();
+    set((s) => ({
+      segments: s.segments.map((x) =>
+        x.id === id
+          ? {
+              ...x,
+              ox: patch.ox !== undefined ? Math.max(0, Math.min(1, patch.ox)) : x.ox,
+              oy: patch.oy !== undefined ? Math.max(0, Math.min(1, patch.oy)) : x.oy,
+              oscale:
+                patch.oscale !== undefined ? Math.max(0.05, Math.min(1, patch.oscale)) : x.oscale,
+            }
+          : x,
+      ),
+    }));
   },
 
   toggleMute: (id) => {

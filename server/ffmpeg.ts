@@ -125,6 +125,52 @@ function fxFilters(fx: EdlSegment["fx"]): string[] {
   return f;
 }
 
+export interface OverlayItem {
+  src: string;
+  in: number; // source seconds
+  out: number;
+  tStart: number; // timeline seconds where it appears
+  ox: number; // 0..1 center
+  oy: number;
+  oscale: number; // width fraction of frame
+}
+
+// Composite picture-in-picture overlays onto a finished base video.
+async function compositeOverlays(
+  baseFile: string,
+  overlays: OverlayItem[],
+  outPath: string,
+): Promise<void> {
+  const meta = await probe(baseFile);
+  const W = meta.width ?? 1280;
+  const inputs: string[] = ["-i", baseFile];
+  for (const o of overlays) {
+    inputs.push("-ss", String(o.in), "-t", String(Math.max(0.05, o.out - o.in)), "-i", o.src);
+  }
+  const filters: string[] = [];
+  let base = "[0:v]";
+  overlays.forEach((o, i) => {
+    const k = i + 1;
+    const ow = Math.max(2, Math.round((W * o.oscale) / 2) * 2);
+    const tEnd = o.tStart + (o.out - o.in);
+    filters.push(`[${k}:v]scale=${ow}:-2,setpts=PTS-STARTPTS+${o.tStart}/TB[ov${k}]`);
+    const next = `[b${k}]`;
+    filters.push(
+      `${base}[ov${k}]overlay=x=${o.ox}*W-w/2:y=${o.oy}*H-h/2:enable='between(t\\,${o.tStart}\\,${tEnd})'${next}`,
+    );
+    base = next;
+  });
+  const { code, stderr } = await run([
+    "ffmpeg", "-y", ...inputs,
+    "-filter_complex", filters.join(";"),
+    "-map", base, "-map", "0:a?",
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+    "-c:a", "aac", "-b:a", "192k",
+    "-pix_fmt", "yuv420p", "-movflags", "+faststart", outPath,
+  ]);
+  if (code !== 0) throw new Error("overlay composite failed: " + stderr.slice(-400));
+}
+
 // Build a single xfade+acrossfade chain over a run of parts joined by crossfades.
 // durs[i] = part i duration; trans[i] = crossfade between part i and i+1 (len = parts-1).
 async function xfadeChain(
@@ -232,6 +278,7 @@ export async function render(
   onProgress?: (p: number) => void,
   burnSubs?: BurnCaption[],
   texts?: BurnText[],
+  overlays?: OverlayItem[],
 ): Promise<void> {
   await mkdir(tmpDir, { recursive: true });
   const totalDur = segments.reduce((s, seg) => s + Math.max(0, seg.out - seg.in), 0);
@@ -285,7 +332,9 @@ export async function render(
       ? Math.min(s.xfadeAfter ?? 0, durs[i], durs[i + 1])
       : 0,
   );
-  const needFinal = !!burnSubs?.length || !!texts?.length;
+  const hasOverlay = !!overlays?.length;
+  const hasBurn = !!burnSubs?.length || !!texts?.length;
+  const needFinal = hasOverlay || hasBurn;
   const concatOut = needFinal ? join(tmpDir, "concat.mp4") : outPath;
 
   if (trans.some((t) => t > 0)) {
@@ -339,8 +388,16 @@ export async function render(
     if (code !== 0) throw new Error("render: concat failed: " + stderr);
   }
 
-  // 3. Optional final burn pass: subtitles (SRT) and/or text overlays (drawtext).
-  if (needFinal) {
+  // 3. Optional PiP overlay composite.
+  let cur = concatOut;
+  if (hasOverlay) {
+    const o = hasBurn ? join(tmpDir, "overlay.mp4") : outPath;
+    await compositeOverlays(cur, overlays!, o);
+    cur = o;
+  }
+
+  // 4. Optional final burn pass: subtitles (SRT) and/or text overlays (drawtext).
+  if (hasBurn) {
     const vfParts: string[] = [];
     if (burnSubs?.length) {
       const srt = burnSubs
@@ -356,7 +413,7 @@ export async function render(
     if (texts?.length) vfParts.push(...drawtextFilters(texts));
 
     const burn = await run([
-      "ffmpeg", "-y", "-i", concatOut,
+      "ffmpeg", "-y", "-i", cur,
       "-vf", vfParts.join(","),
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
       "-c:a", "copy", "-movflags", "+faststart", outPath,
