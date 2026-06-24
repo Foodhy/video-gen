@@ -343,24 +343,24 @@ export default function Player() {
       </div>
       <div className="player-bar">
         <button className="transport" onClick={() => seekTo(0)} disabled={!hasContent} title="Go to start (Home)">
-          ⏮
+          |◀
         </button>
         <button className="transport" onClick={() => seekTo(playhead - 5)} disabled={!hasContent} title="Back 5s">
-          ⏪
+          ◀◀
         </button>
         <button
-          className="transport"
+          className="transport play"
           onClick={() => setPlaying(!playing)}
           disabled={!hasContent}
           title="Play / Pause (space)"
         >
-          {playing ? "❚❚" : "►"}
+          {playing ? "❚❚" : "▶"}
         </button>
         <button className="transport" onClick={() => seekTo(playhead + 5)} disabled={!hasContent} title="Forward 5s">
-          ⏩
+          ▶▶
         </button>
         <button className="transport" onClick={() => seekTo(total)} disabled={!hasContent} title="Go to end (End)">
-          ⏭
+          ▶|
         </button>
         <span className="tc">
           <span className="cur">{tc(playhead)}</span> / {tc(total)}

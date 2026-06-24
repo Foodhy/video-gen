@@ -486,19 +486,44 @@ body {
 .player-bar {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 4px;
   padding: 10px 16px;
   border-top: 1px solid var(--line);
 }
-.transport {
-  background: transparent;
-  border: none;
-  color: var(--text-0);
-  font-size: 16px;
-  cursor: pointer;
+.player-bar .tc {
+  margin-left: 14px;
 }
-.transport:hover {
+.transport {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 26px;
+  padding: 0 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-1);
+  /* mono family keeps the triangle/bar glyphs uniform and text-presentation */
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-font-feature-settings: "tnum";
+  text-rendering: optimizeLegibility;
+}
+.transport:hover:not(:disabled) {
   color: var(--accent-0);
+  border-color: var(--line-strong);
+}
+.transport:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+.transport.play {
+  color: var(--text-0);
+  font-size: 13px;
+  min-width: 34px;
 }
 .tc {
   font-family: var(--font-mono);
