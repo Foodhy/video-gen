@@ -4,6 +4,8 @@ import {
   timelineDuration,
   placeCaptions,
   placeTrack,
+  buildSnapPoints,
+  snapValue,
   type PlacedSegment,
 } from "../../state/editor.ts";
 import { tc } from "../../lib/format.ts";
@@ -35,6 +37,9 @@ export default function Timeline() {
   const setFx = useEditor((s) => s.setFx);
   const clearFx = useEditor((s) => s.clearFx);
   const moveSegmentBefore = useEditor((s) => s.moveSegmentBefore);
+  const snapEnabled = useEditor((s) => s.snapEnabled);
+  const toggleSnap = useEditor((s) => s.toggleSnap);
+  const snapPoints = buildSnapPoints(segments, texts);
 
   function reorder(id: string, dropCenterSec: number) {
     const seg = segments.find((x) => x.id === id);
@@ -67,7 +72,19 @@ export default function Timeline() {
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const x = e.clientX - rect.left + el.scrollLeft;
-    setPlayhead(Math.max(0, x / pxPerSec));
+    let t = Math.max(0, x / pxPerSec);
+    if (snapEnabled) t = snapValue(t, snapPoints, 8 / pxPerSec);
+    setPlayhead(t);
+  }
+
+  function jumpEdit(dir: -1 | 1) {
+    const cur = playhead;
+    const sorted = snapPoints;
+    const next =
+      dir > 0
+        ? sorted.find((p) => p > cur + 1e-4)
+        : [...sorted].reverse().find((p) => p < cur - 1e-4);
+    if (next !== undefined) setPlayhead(next);
   }
 
   async function extractSection(seg: PlacedSegment) {
@@ -191,6 +208,19 @@ export default function Timeline() {
         >
           🗑 Delete
         </button>
+        <button className="tl-btn" onClick={() => jumpEdit(-1)} title="Previous edit (,)">
+          ⟸
+        </button>
+        <button className="tl-btn" onClick={() => jumpEdit(1)} title="Next edit (.)">
+          ⟹
+        </button>
+        <button
+          className={"tl-btn" + (snapEnabled ? " on" : "")}
+          onClick={toggleSnap}
+          title="Snap to edges (magnet)"
+        >
+          🧲 Snap
+        </button>
         <span className="tc" style={{ marginLeft: 6 }}>
           {tc(playhead)}
         </span>
@@ -223,11 +253,13 @@ export default function Timeline() {
             kind="video"
             onClipContext={(seg, x, y) => setMenu({ x, y, seg })}
             onReorder={reorder}
+            snapPoints={snapPoints}
           />
           <Track
             kind="audio"
             onClipContext={(seg, x, y) => setMenu({ x, y, seg })}
             onReorder={reorder}
+            snapPoints={snapPoints}
           />
 
           {placedCaps.length > 0 && (

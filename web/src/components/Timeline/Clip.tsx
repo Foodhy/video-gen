@@ -1,15 +1,19 @@
 import { useRef, useState } from "react";
-import { useEditor, hasFx, type PlacedSegment } from "../../state/editor.ts";
+import { useEditor, hasFx, snapValue, type PlacedSegment } from "../../state/editor.ts";
 
 export default function Clip({
   placed,
   onContext,
   onReorder,
+  snapPoints,
 }: {
   placed: PlacedSegment;
   onContext?: (placed: PlacedSegment, x: number, y: number) => void;
   onReorder?: (id: string, dropCenterSec: number) => void;
+  snapPoints?: number[];
 }) {
+  const snapEnabled = useEditor((s) => s.snapEnabled);
+  const playhead = useEditor((s) => s.playhead);
   const pxPerSec = useEditor((s) => s.pxPerSec);
   const assets = useEditor((s) => s.assets);
   const selected = useEditor((s) => s.selectedSegmentId === placed.id);
@@ -38,8 +42,24 @@ export default function Clip({
     const d = dragState.current;
     if (!d) return;
     const deltaSec = (e.clientX - d.startX) / pxPerSec;
-    if (d.side === "l") trimSegment(placed.id, { in: d.in0 + deltaSec });
-    else trimSegment(placed.id, { out: d.out0 + deltaSec });
+    let nextIn = d.side === "l" ? d.in0 + deltaSec : d.in0;
+    let nextOut = d.side === "r" ? d.out0 + deltaSec : d.out0;
+    // Snap the moving right edge (start + dur) to nearby edges / playhead.
+    if (snapEnabled) {
+      const thresh = 8 / pxPerSec;
+      const cands = [...(snapPoints ?? []), playhead].filter(
+        (p) => Math.abs(p - (placed.start + placed.dur)) > 1e-6,
+      );
+      const edge = placed.start + (nextOut - nextIn);
+      const snapped = snapValue(edge, cands, thresh);
+      if (snapped !== edge) {
+        const newDur = snapped - placed.start;
+        if (d.side === "r") nextOut = nextIn + newDur;
+        else nextIn = nextOut - newDur;
+      }
+    }
+    if (d.side === "l") trimSegment(placed.id, { in: nextIn });
+    else trimSegment(placed.id, { out: nextOut });
   }
   function onHandleUp(e: React.PointerEvent) {
     if (dragState.current) {

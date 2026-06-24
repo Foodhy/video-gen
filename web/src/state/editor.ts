@@ -76,6 +76,7 @@ interface EditorState {
   captionLang: Record<string, string>; // language code per clip's captions
   texts: TextClip[];
   selectedTextId: string | null;
+  snapEnabled: boolean;
   showCaptions: boolean;
   logs: LogEntry[];
   showLogs: boolean;
@@ -124,6 +125,7 @@ interface EditorState {
   updateText: (id: string, patch: Partial<Omit<TextClip, "id">>) => void;
   deleteText: (id: string) => void;
   selectText: (id: string | null) => void;
+  toggleSnap: () => void;
   pushLog: (e: Omit<LogEntry, "id" | "ts">) => void;
   clearLogs: () => void;
   toggleLogs: () => void;
@@ -215,6 +217,36 @@ export function placeTrack(segments: Segment[], track: TrackKind): PlacedSegment
 
 export function trackDuration(segments: Segment[], track: TrackKind): number {
   return placeTrack(segments, track).reduce((s, p) => s + p.dur, 0);
+}
+
+// Timeline positions worth snapping to: clip + text edges, plus 0.
+export function buildSnapPoints(segments: Segment[], texts: TextClip[]): number[] {
+  const pts = new Set<number>([0]);
+  for (const track of ["video", "audio"] as const) {
+    for (const p of placeTrack(segments, track)) {
+      pts.add(+p.start.toFixed(3));
+      pts.add(+(p.start + p.dur).toFixed(3));
+    }
+  }
+  for (const t of texts) {
+    pts.add(+t.start.toFixed(3));
+    pts.add(+t.end.toFixed(3));
+  }
+  return [...pts].sort((a, b) => a - b);
+}
+
+// Snap a value to the nearest candidate within threshold (returns value unchanged if none).
+export function snapValue(v: number, points: number[], threshold: number): number {
+  let best = v;
+  let bestD = threshold;
+  for (const p of points) {
+    const d = Math.abs(p - v);
+    if (d < bestD) {
+      bestD = d;
+      best = p;
+    }
+  }
+  return best;
 }
 
 export function timelineDuration(segments: Segment[]): number {
@@ -316,6 +348,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   captionLang: {},
   texts: [],
   selectedTextId: null,
+  snapEnabled: true,
   showCaptions: true,
   logs: [],
   showLogs: false,
@@ -592,6 +625,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     }));
   },
   selectText: (id) => set({ selectedTextId: id, selectedSegmentId: null }),
+  toggleSnap: () => set((s) => ({ snapEnabled: !s.snapEnabled })),
 
   pushLog: (e) =>
     set((s) => {

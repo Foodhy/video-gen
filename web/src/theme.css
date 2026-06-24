@@ -710,6 +710,10 @@ body {
   color: var(--text-muted);
   cursor: not-allowed;
 }
+.tl-btn.on {
+  border-color: var(--accent-0);
+  color: var(--accent-0);
+}
 .tl-zoom {
   margin-left: auto;
   display: flex;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useEditor, serializeDoc, type Asset, type Caption } from "./state/editor.ts";
+import { useEditor, serializeDoc, buildSnapPoints, type Asset, type Caption } from "./state/editor.ts";
 import { loadProject, saveDoc } from "./lib/api.ts";
 import Toolbar from "./components/Toolbar.tsx";
 import MediaPanel from "./components/MediaPanel.tsx";
@@ -103,6 +103,15 @@ export default function App() {
         splitAtPlayhead();
       } else if (e.key === "Backspace" || e.key === "Delete") {
         deleteSelected();
+      } else if (e.key === "," || e.key === ".") {
+        const st = useEditor.getState();
+        const pts = buildSnapPoints(st.segments, st.texts);
+        const cur = st.playhead;
+        const next =
+          e.key === "."
+            ? pts.find((p) => p > cur + 1e-4)
+            : [...pts].reverse().find((p) => p < cur - 1e-4);
+        if (next !== undefined) st.setPlayhead(next);
       }
     }
     window.addEventListener("keydown", onKey);
