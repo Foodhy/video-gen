@@ -5,7 +5,6 @@ import {
   buildSnapPoints,
   timelineDuration,
   type Asset,
-  type Caption,
 } from "./state/editor.ts";
 import { loadProject, saveDoc } from "./lib/api.ts";
 import Toolbar from "./components/Toolbar.tsx";
@@ -44,12 +43,7 @@ export default function App() {
           logger.warn("project", "Saved project no longer exists — starting fresh", pid);
           return;
         }
-        const doc = (p.doc ?? {}) as {
-          segments?: any[];
-          captions?: Record<string, Caption[]>;
-          captionLang?: Record<string, string>;
-          texts?: any[];
-        };
+        const doc = (p.doc ?? {}) as any;
         useEditor.getState().setProject(p.projectId);
         useEditor.getState().hydrate({
           assets: p.assets as Asset[],
@@ -57,6 +51,8 @@ export default function App() {
           captions: doc.captions,
           captionLang: doc.captionLang,
           texts: doc.texts,
+          folders: doc.folders,
+          folderOf: doc.folderOf,
         });
         logger.success(
           "project",
@@ -82,7 +78,7 @@ export default function App() {
         localStorage.setItem(LS_KEY, s.projectId);
       }
       if (!hydrated.current || !s.projectId) return;
-      const sig = [s.segments, s.captions, s.captionLang, s.texts];
+      const sig = [s.segments, s.captions, s.captionLang, s.texts, s.folders, s.folderOf];
       if (sig.every((v, i) => v === prev[i])) return; // doc unchanged → ignore
       prev = sig;
       clearTimeout(timer);

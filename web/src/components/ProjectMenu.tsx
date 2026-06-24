@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useEditor, type Asset, type Caption } from "../state/editor.ts";
+import { useEditor, type Asset } from "../state/editor.ts";
 import {
   listProjects,
   createProject,
@@ -42,12 +42,7 @@ export default function ProjectMenu() {
         showToast("project not found", true);
         return;
       }
-      const doc = (p.doc ?? {}) as {
-        segments?: any[];
-        captions?: Record<string, Caption[]>;
-        captionLang?: Record<string, string>;
-        texts?: any[];
-      };
+      const doc = (p.doc ?? {}) as any;
       useEditor.getState().setProject(p.projectId);
       useEditor.getState().hydrate({
         assets: p.assets as Asset[],
@@ -55,6 +50,8 @@ export default function ProjectMenu() {
         captions: doc.captions,
         captionLang: doc.captionLang,
         texts: doc.texts,
+        folders: doc.folders,
+        folderOf: doc.folderOf,
       });
       showToast("Opened project");
     } catch (e: any) {

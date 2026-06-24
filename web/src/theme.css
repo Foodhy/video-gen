@@ -347,6 +347,79 @@ body {
   gap: 8px;
   margin-top: 14px;
 }
+.import-hint {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-muted);
+}
+.panel-body.drop-here {
+  outline: 1px dashed var(--accent-0);
+  outline-offset: -4px;
+}
+.media-folder {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-0);
+}
+.media-folder.drop-here {
+  border-color: var(--accent-0);
+}
+.folder-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.folder-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-1);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+  width: 14px;
+}
+.folder-name {
+  flex: 1;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  color: var(--text-0);
+  cursor: text;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.folder-count {
+  color: var(--text-muted);
+}
+.folder-rename {
+  flex: 1;
+  background: var(--bg-2);
+  border: 1px solid var(--accent-0);
+  color: var(--text-0);
+  font-size: 11px;
+  padding: 2px 5px;
+}
+.folder-del {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+}
+.folder-del:hover {
+  color: #b04a4a;
+}
+.media-folder .media-grid {
+  margin: 8px;
+}
 .media-item {
   position: relative;
   background: var(--bg-2);

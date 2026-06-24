@@ -83,6 +83,8 @@ interface EditorState {
   captionLang: Record<string, string>; // language code per clip's captions
   texts: TextClip[];
   selectedTextId: string | null;
+  folders: { id: string; name: string }[]; // media library folders
+  folderOf: Record<string, string>; // assetId -> folderId
   snapEnabled: boolean;
   showCaptions: boolean;
   logs: LogEntry[];
@@ -99,6 +101,8 @@ interface EditorState {
     captions?: Record<string, Caption[]>;
     captionLang?: Record<string, string>;
     texts?: TextClip[];
+    folders?: { id: string; name: string }[];
+    folderOf?: Record<string, string>;
   }) => void;
   addAsset: (a: Asset) => void;
   removeAsset: (assetId: string) => void;
@@ -139,6 +143,10 @@ interface EditorState {
   deleteText: (id: string) => void;
   selectText: (id: string | null) => void;
   toggleSnap: () => void;
+  addFolder: () => void;
+  renameFolder: (id: string, name: string) => void;
+  deleteFolder: (id: string) => void;
+  moveToFolder: (assetId: string, folderId: string | null) => void;
   pushLog: (e: Omit<LogEntry, "id" | "ts">) => void;
   clearLogs: () => void;
   toggleLogs: () => void;
@@ -194,6 +202,8 @@ export interface EditorDoc {
   captions: Record<string, Caption[]>;
   captionLang: Record<string, string>;
   texts: TextClip[];
+  folders: { id: string; name: string }[];
+  folderOf: Record<string, string>;
 }
 
 // Serialize the persistable editor document (excludes media URLs/runtime UI).
@@ -202,12 +212,16 @@ export function serializeDoc(s: {
   captions: Record<string, Caption[]>;
   captionLang: Record<string, string>;
   texts: TextClip[];
+  folders: { id: string; name: string }[];
+  folderOf: Record<string, string>;
 }): EditorDoc {
   return {
     segments: s.segments,
     captions: s.captions,
     captionLang: s.captionLang,
     texts: s.texts,
+    folders: s.folders,
+    folderOf: s.folderOf,
   };
 }
 
@@ -385,6 +399,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   captionLang: {},
   texts: [],
   selectedTextId: null,
+  folders: [],
+  folderOf: {},
   snapEnabled: true,
   showCaptions: true,
   logs: [],
@@ -404,6 +420,8 @@ export const useEditor = create<EditorState>((set, get) => ({
       captions: {},
       captionLang: {},
       texts: [],
+      folders: [],
+      folderOf: {},
       selectedTextId: null,
       selectedAssetId: null,
       selectedSegmentId: null,
@@ -414,13 +432,15 @@ export const useEditor = create<EditorState>((set, get) => ({
       future: [],
     }),
 
-  hydrate: ({ assets, segments, captions, captionLang, texts }) =>
+  hydrate: ({ assets, segments, captions, captionLang, texts, folders, folderOf }) =>
     set({
       assets: Object.fromEntries(assets.map((a) => [a.id, a])),
       segments: segments ?? [],
       captions: captions ?? {},
       captionLang: captionLang ?? {},
       texts: texts ?? [],
+      folders: folders ?? [],
+      folderOf: folderOf ?? {},
       selectedTextId: null,
       selectedSegmentId: null,
       selectedIds: [],
@@ -443,10 +463,13 @@ export const useEditor = create<EditorState>((set, get) => ({
       delete captions[assetId];
       const captionLang = { ...s.captionLang };
       delete captionLang[assetId];
+      const folderOf = { ...s.folderOf };
+      delete folderOf[assetId];
       return {
         assets,
         captions,
         captionLang,
+        folderOf,
         segments: s.segments.filter((seg) => seg.clipId !== assetId),
         selectedAssetId: s.selectedAssetId === assetId ? null : s.selectedAssetId,
         selectedSegmentId: null,
@@ -716,6 +739,29 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
   selectText: (id) => set({ selectedTextId: id, selectedSegmentId: null }),
   toggleSnap: () => set((s) => ({ snapEnabled: !s.snapEnabled })),
+
+  addFolder: () =>
+    set((s) => ({
+      folders: [
+        ...s.folders,
+        { id: "fld" + Math.random().toString(36).slice(2, 8), name: "New Folder" },
+      ],
+    })),
+  renameFolder: (id, name) =>
+    set((s) => ({ folders: s.folders.map((f) => (f.id === id ? { ...f, name } : f)) })),
+  deleteFolder: (id) =>
+    set((s) => {
+      const folderOf = { ...s.folderOf };
+      for (const k of Object.keys(folderOf)) if (folderOf[k] === id) delete folderOf[k];
+      return { folders: s.folders.filter((f) => f.id !== id), folderOf };
+    }),
+  moveToFolder: (assetId, folderId) =>
+    set((s) => {
+      const folderOf = { ...s.folderOf };
+      if (folderId) folderOf[assetId] = folderId;
+      else delete folderOf[assetId];
+      return { folderOf };
+    }),
 
   pushLog: (e) =>
     set((s) => {

@@ -115,8 +115,22 @@ test("fxToCss + hasFx", () => {
 });
 
 test("serializeDoc keeps only persistable fields", () => {
-  const doc = serializeDoc({ segments: [seg("a", 0, 1)], captions: {}, captionLang: {}, texts: [] });
-  expect(Object.keys(doc).sort()).toEqual(["captionLang", "captions", "segments", "texts"]);
+  const doc = serializeDoc({
+    segments: [seg("a", 0, 1)],
+    captions: {},
+    captionLang: {},
+    texts: [],
+    folders: [],
+    folderOf: {},
+  });
+  expect(Object.keys(doc).sort()).toEqual([
+    "captionLang",
+    "captions",
+    "folderOf",
+    "folders",
+    "segments",
+    "texts",
+  ]);
 });
 
 // ---------- store actions ----------
