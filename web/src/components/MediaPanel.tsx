@@ -20,12 +20,14 @@ export default function MediaPanel() {
   const selectAsset = useEditor((s) => s.selectAsset);
   const setPreview = useEditor((s) => s.setPreview);
   const addFolder = useEditor((s) => s.addFolder);
+  const addText = useEditor((s) => s.addText);
   const renameFolder = useEditor((s) => s.renameFolder);
   const deleteFolder = useEditor((s) => s.deleteFolder);
   const moveToFolder = useEditor((s) => s.moveToFolder);
   const showToast = useEditor((s) => s.showToast);
 
   const [menu, setMenu] = useState<{ x: number; y: number; asset: Asset } | null>(null);
+  const [bgMenu, setBgMenu] = useState<{ x: number; y: number } | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [dropTarget, setDropTarget] = useState<string | "root" | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -158,6 +160,11 @@ export default function MediaPanel() {
         onDragOver={allowDrop("root")}
         onDragLeave={() => setDropTarget(null)}
         onDrop={onDropInto(null)}
+        onContextMenu={(e) => {
+          if ((e.target as HTMLElement).closest(".media-item")) return; // item has its own menu
+          e.preventDefault();
+          setBgMenu({ x: e.clientX, y: e.clientY });
+        }}
       >
         <input ref={fileRef} type="file" accept="video/*,audio/*" multiple hidden onChange={onPick} />
         <button className="btn-import" onClick={() => fileRef.current?.click()}>
@@ -222,6 +229,19 @@ export default function MediaPanel() {
       </div>
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} items={itemsFor(menu.asset)} onClose={() => setMenu(null)} />
+      )}
+      {bgMenu && (
+        <ContextMenu
+          x={bgMenu.x}
+          y={bgMenu.y}
+          items={[
+            { label: "+ Import media…", onClick: () => fileRef.current?.click() },
+            { label: "+ New folder", onClick: () => addFolder() },
+            { separator: true, label: "" },
+            { label: "+ Add text overlay", onClick: () => addText() },
+          ]}
+          onClose={() => setBgMenu(null)}
+        />
       )}
     </aside>
   );
