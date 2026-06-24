@@ -79,6 +79,7 @@ interface EditorState {
   selectedSegmentId: string | null;
   selectedIds: string[]; // multi-selection (marquee); selectedSegmentId is the primary
   previewAssetId: string | null; // library asset being previewed standalone in the player
+  previewAutoplay: boolean; // setting: auto-play a preview when opened
   playhead: number; // timeline seconds
   playing: boolean;
   pxPerSec: number;
@@ -115,6 +116,7 @@ interface EditorState {
   selectSegment: (id: string | null) => void;
   setSelection: (ids: string[]) => void;
   setPreview: (assetId: string | null) => void;
+  setPreviewAutoplay: (v: boolean) => void;
   splitAtPlayhead: () => void;
   trimSegment: (id: string, patch: { in?: number; out?: number }) => void;
   deleteSegment: (id: string) => void;
@@ -402,6 +404,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   selectedSegmentId: null,
   selectedIds: [],
   previewAssetId: null,
+  previewAutoplay:
+    typeof localStorage !== "undefined" ? localStorage.getItem("vg:previewAutoplay") !== "0" : true,
   playhead: 0,
   playing: false,
   captions: {},
@@ -528,6 +532,14 @@ export const useEditor = create<EditorState>((set, get) => ({
   setSelection: (ids) =>
     set({ selectedIds: ids, selectedSegmentId: ids[0] ?? null, selectedTextId: null }),
   setPreview: (assetId) => set({ previewAssetId: assetId, playing: false }),
+  setPreviewAutoplay: (v) => {
+    try {
+      localStorage.setItem("vg:previewAutoplay", v ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+    set({ previewAutoplay: v });
+  },
 
   splitAtPlayhead: () => {
     const t0 = get().playhead;

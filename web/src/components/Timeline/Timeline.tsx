@@ -204,6 +204,22 @@ export default function Timeline() {
     let t = Math.max(0, x / pxPerSec);
     if (snapEnabled) t = snapValue(t, snapPoints, 8 / pxPerSec);
     setPlayhead(t);
+    useEditor.getState().setPreview(null); // interacting with the timeline exits preview
+  }
+
+  // Mouse-wheel over the timeline zooms (scales), keeping the time under the cursor fixed.
+  function onWheelZoom(e: React.WheelEvent) {
+    const el = scrollRef.current;
+    if (!el || e.deltaY === 0) return;
+    e.preventDefault();
+    const rect = el.getBoundingClientRect();
+    const cursorContentX = e.clientX - rect.left + el.scrollLeft;
+    const timeAt = cursorContentX / pxPerSec;
+    const next = Math.max(10, Math.min(400, pxPerSec * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
+    setZoom(next);
+    requestAnimationFrame(() => {
+      el.scrollLeft = timeAt * next - (e.clientX - rect.left);
+    });
   }
 
   function jumpEdit(dir: -1 | 1) {
@@ -365,17 +381,19 @@ export default function Timeline() {
         </span>
         <div className="tl-zoom">
           <span className="label">Zoom</span>
-          <input
-            type="range"
-            min={10}
-            max={300}
-            value={pxPerSec}
-            onChange={(e) => setZoom(Number(e.target.value))}
-          />
+          <button className="tl-btn" onClick={() => setZoom(pxPerSec / 1.25)} title="Zoom out (wheel)">
+            −
+          </button>
+          <span className="mono" style={{ fontSize: 10, color: "var(--text-1)", minWidth: 34, textAlign: "center" }}>
+            {Math.round(pxPerSec)}px
+          </span>
+          <button className="tl-btn" onClick={() => setZoom(pxPerSec * 1.25)} title="Zoom in (wheel)">
+            +
+          </button>
         </div>
       </div>
 
-      <div className="tl-scroll" ref={scrollRef}>
+      <div className="tl-scroll" ref={scrollRef} onWheel={onWheelZoom}>
         <div
           className="tl-inner"
           style={{ width: contentW }}

@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useEditor, timelineDuration } from "../state/editor.ts";
 import ProjectMenu from "./ProjectMenu.tsx";
+import ContextMenu from "./ContextMenu.tsx";
 import { startTour } from "../lib/tour.ts";
 
 const TOOLS = [
@@ -21,6 +23,9 @@ export default function Toolbar({ onExport }: { onExport: () => void }) {
   const canRedo = useEditor((s) => s.future.length > 0);
   const errCount = useEditor((s) => s.logs).filter((l) => l.level === "error").length;
   const addText = useEditor((s) => s.addText);
+  const previewAutoplay = useEditor((s) => s.previewAutoplay);
+  const setPreviewAutoplay = useEditor((s) => s.setPreviewAutoplay);
+  const [settings, setSettings] = useState<{ x: number; y: number } | null>(null);
   const hasVideo = timelineDuration(segments) > 0;
 
   return (
@@ -71,6 +76,14 @@ export default function Toolbar({ onExport }: { onExport: () => void }) {
         Captions
       </button>
       <span className="spacer" />
+      <button
+        className="tool"
+        onClick={(e) => setSettings({ x: e.clientX - 180, y: 46 })}
+        title="Settings"
+      >
+        <span className="ic">⚙</span>
+        Settings
+      </button>
       <button className="tool" onClick={startTour} title="Guided tour of the editor">
         <span className="ic">?</span>
         Guide
@@ -90,6 +103,19 @@ export default function Toolbar({ onExport }: { onExport: () => void }) {
       <button data-tour="export" className="btn-cta" onClick={onExport} disabled={!hasVideo}>
         ⬇ Export
       </button>
+      {settings && (
+        <ContextMenu
+          x={settings.x}
+          y={settings.y}
+          items={[
+            {
+              label: (previewAutoplay ? "✓ " : "○ ") + "Auto-play preview",
+              onClick: () => setPreviewAutoplay(!previewAutoplay),
+            },
+          ]}
+          onClose={() => setSettings(null)}
+        />
+      )}
     </header>
   );
 }

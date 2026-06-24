@@ -23,6 +23,7 @@ export default function Player() {
   const setPlaying = useEditor((s) => s.setPlaying);
 
   const previewAssetId = useEditor((s) => s.previewAssetId);
+  const previewAutoplay = useEditor((s) => s.previewAutoplay);
   const setPreview = useEditor((s) => s.setPreview);
   const previewAsset = previewAssetId ? assets[previewAssetId] : null;
   const texts = useEditor((s) => s.texts);
@@ -248,10 +249,10 @@ export default function Player() {
             {previewAsset.kind === "audio" ? (
               <div className="preview-audio">
                 <span style={{ fontSize: 48, color: "var(--text-muted)" }}>♪</span>
-                <audio src={previewAsset.mediaUrl} controls autoPlay />
+                <audio src={previewAsset.mediaUrl} controls autoPlay={previewAutoplay} />
               </div>
             ) : (
-              <video src={previewAsset.mediaUrl} controls autoPlay className="preview-video" />
+              <video src={previewAsset.mediaUrl} controls autoPlay={previewAutoplay} className="preview-video" />
             )}
           </div>
         ) : hasVideo ? (
