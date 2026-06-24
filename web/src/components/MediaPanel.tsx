@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEditor, type Asset } from "../state/editor.ts";
 import { importFile, deleteClip } from "../lib/api.ts";
 import { logger } from "../lib/logger.ts";
@@ -27,6 +27,14 @@ export default function MediaPanel() {
   const addTextChild = useEditor((s) => s.addTextChild);
   const deleteTextComponent = useEditor((s) => s.deleteTextComponent);
   const playhead = useEditor((s) => s.playhead);
+  const importReq = useEditor((s) => s.importReq);
+
+  // Toolbar MEDIA/AUDIO buttons request opening the file picker here.
+  useEffect(() => {
+    if (importReq.nonce === 0 || !fileRef.current) return;
+    fileRef.current.accept = importReq.kind === "audio" ? "audio/*" : "video/*,audio/*";
+    fileRef.current.click();
+  }, [importReq.nonce]);
   const renameFolder = useEditor((s) => s.renameFolder);
   const deleteFolder = useEditor((s) => s.deleteFolder);
   const moveToFolder = useEditor((s) => s.moveToFolder);

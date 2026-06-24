@@ -2,13 +2,8 @@ import { useState } from "react";
 import { useEditor, timelineDuration } from "../state/editor.ts";
 import ProjectMenu from "./ProjectMenu.tsx";
 import ContextMenu from "./ContextMenu.tsx";
+import About from "./About.tsx";
 import { startTour } from "../lib/tour.ts";
-
-const TOOLS = [
-  { id: "media", ic: "▦", label: "Media", on: true },
-  { id: "audio", ic: "♪", label: "Audio", on: true },
-  { id: "effects", ic: "✶", label: "Effects", on: false },
-];
 
 export default function Toolbar({ onExport }: { onExport: () => void }) {
   const segments = useEditor((s) => s.segments);
@@ -23,11 +18,14 @@ export default function Toolbar({ onExport }: { onExport: () => void }) {
   const canRedo = useEditor((s) => s.future.length > 0);
   const errCount = useEditor((s) => s.logs).filter((l) => l.level === "error").length;
   const createTextComponent = useEditor((s) => s.createTextComponent);
+  const requestImport = useEditor((s) => s.requestImport);
+  const selectedSegmentId = useEditor((s) => s.selectedSegmentId);
   const previewAutoplay = useEditor((s) => s.previewAutoplay);
   const setPreviewAutoplay = useEditor((s) => s.setPreviewAutoplay);
   const recoverPlayer = useEditor((s) => s.recoverPlayer);
   const showToast = useEditor((s) => s.showToast);
   const [settings, setSettings] = useState<{ x: number; y: number } | null>(null);
+  const [showAbout, setShowAbout] = useState(false);
   const hasVideo = timelineDuration(segments) > 0;
 
   return (
@@ -48,17 +46,28 @@ export default function Toolbar({ onExport }: { onExport: () => void }) {
         </button>
       </span>
       <span style={{ width: 14 }} />
-      {TOOLS.map((t) => (
-        <button
-          key={t.id}
-          className={"tool" + (t.id === "media" ? " active" : "")}
-          disabled={!t.on}
-          title={t.on ? t.label : t.label + " — Phase 2"}
-        >
-          <span className="ic">{t.ic}</span>
-          {t.label}
-        </button>
-      ))}
+      <button className="tool" onClick={() => requestImport("all")} title="Import video/audio into the library">
+        <span className="ic">▦</span>
+        Media
+      </button>
+      <button className="tool" onClick={() => requestImport("audio")} title="Import audio into the library">
+        <span className="ic">♪</span>
+        Audio
+      </button>
+      <button
+        className="tool"
+        onClick={() =>
+          showToast(
+            selectedSegmentId
+              ? "Effects are in Details (right panel) for the selected clip"
+              : "Select a clip first — effects show in Details",
+          )
+        }
+        title="Per-clip effects live in the Details panel"
+      >
+        <span className="ic">✶</span>
+        Effects
+      </button>
       <button
         className="tool"
         onClick={createTextComponent}
@@ -131,10 +140,16 @@ export default function Toolbar({ onExport }: { onExport: () => void }) {
               disabled: typeof document !== "undefined" && !document.fullscreenElement,
               onClick: () => document.exitFullscreen().catch(() => {}),
             },
+            { separator: true, label: "" },
+            {
+              label: "ⓘ About VIDEO—GEN",
+              onClick: () => setShowAbout(true),
+            },
           ]}
           onClose={() => setSettings(null)}
         />
       )}
+      {showAbout && <About onClose={() => setShowAbout(false)} />}
     </header>
   );
 }

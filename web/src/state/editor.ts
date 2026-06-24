@@ -94,6 +94,7 @@ interface EditorState {
   previewAssetId: string | null; // library asset being previewed standalone in the player
   previewAutoplay: boolean; // setting: auto-play a preview when opened
   playerNonce: number; // bump to force the player to reload its media elements
+  importReq: { nonce: number; kind: "all" | "audio" }; // toolbar -> open library file picker
   playhead: number; // timeline seconds
   playing: boolean;
   pxPerSec: number;
@@ -135,6 +136,7 @@ interface EditorState {
   setPreview: (assetId: string | null) => void;
   setPreviewAutoplay: (v: boolean) => void;
   recoverPlayer: () => void;
+  requestImport: (kind: "all" | "audio") => void;
   splitAtPlayhead: () => void;
   trimSegment: (id: string, patch: { in?: number; out?: number }) => void;
   deleteSegment: (id: string) => void;
@@ -437,6 +439,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   previewAutoplay:
     typeof localStorage !== "undefined" ? localStorage.getItem("vg:previewAutoplay") !== "0" : true,
   playerNonce: 0,
+  importReq: { nonce: 0, kind: "all" },
   playhead: 0,
   playing: false,
   captions: {},
@@ -576,6 +579,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({ selectedIds: ids, selectedSegmentId: ids[0] ?? null, selectedTextId: null, selectedComponentId: null }),
   setPreview: (assetId) => set({ previewAssetId: assetId, playing: false }),
   recoverPlayer: () => set((s) => ({ playerNonce: s.playerNonce + 1, previewAssetId: null })),
+  requestImport: (kind) => set((s) => ({ importReq: { nonce: s.importReq.nonce + 1, kind } })),
   setPreviewAutoplay: (v) => {
     try {
       localStorage.setItem("vg:previewAutoplay", v ? "1" : "0");
