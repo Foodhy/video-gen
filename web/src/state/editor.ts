@@ -53,6 +53,7 @@ export interface Caption {
 
 // A caption mapped onto timeline time through the EDL.
 export interface PlacedCaption extends Caption {
+  clipId: string;
   tStart: number;
   tEnd: number;
 }
@@ -136,6 +137,7 @@ interface EditorState {
     lang?: string,
   ) => void;
   updateCaptionText: (clipId: string, capId: string, text: string) => void;
+  setCaptionTiming: (clipId: string, capId: string, start: number, end: number) => void;
   clearCaptions: (clipId: string) => void;
   toggleCaptions: () => void;
   addText: () => void;
@@ -303,6 +305,7 @@ export function placeCaptions(
       if (e <= s) continue; // caption falls outside this trimmed segment
       out.push({
         ...c,
+        clipId: seg.clipId,
         tStart: seg.start + (s - seg.in),
         tEnd: seg.start + (e - seg.in),
       });
@@ -698,6 +701,15 @@ export const useEditor = create<EditorState>((set, get) => ({
       captions: {
         ...s.captions,
         [clipId]: (s.captions[clipId] ?? []).map((c) => (c.id === capId ? { ...c, text } : c)),
+      },
+    })),
+  setCaptionTiming: (clipId, capId, start, end) =>
+    set((s) => ({
+      captions: {
+        ...s.captions,
+        [clipId]: (s.captions[clipId] ?? []).map((c) =>
+          c.id === capId ? { ...c, start: Math.max(0, start), end: Math.max(start + 0.05, end) } : c,
+        ),
       },
     })),
   clearCaptions: (clipId) => {

@@ -286,6 +286,20 @@ test("marquee multi-select deletes all selected segments", () => {
   expect(useEditor.getState().segments.map((s) => s.id)).toEqual(["a", "b", "c"]);
 });
 
+test("setCaptionTiming moves a caption and clamps to >=0", () => {
+  const s = useEditor.getState();
+  s.addAsset(asset("v", 10, "video"));
+  s.addSegmentForAsset("v");
+  s.setCaptions("v", [{ start: 2, end: 3, text: "hi" }]);
+  const capId = useEditor.getState().captions["v"][0].id;
+  s.setCaptionTiming("v", capId, 5, 6);
+  expect(useEditor.getState().captions["v"][0]).toMatchObject({ start: 5, end: 6 });
+  s.setCaptionTiming("v", capId, -1, 0.5); // clamp start to 0, end >= start+0.05
+  const c = useEditor.getState().captions["v"][0];
+  expect(c.start).toBe(0);
+  expect(c.end).toBeGreaterThanOrEqual(0.05);
+});
+
 test("captions stay aligned after a split", () => {
   const s = useEditor.getState();
   s.addAsset(asset("v", 10, "video"));

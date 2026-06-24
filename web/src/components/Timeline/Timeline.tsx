@@ -66,6 +66,26 @@ export default function Timeline() {
   const addText = useEditor((s) => s.addText);
   const deleteText = useEditor((s) => s.deleteText);
   const selectTextFn = useEditor((s) => s.selectText);
+  const updateText = useEditor((s) => s.updateText);
+  const setCaptionTiming = useEditor((s) => s.setCaptionTiming);
+  const record = useEditor((s) => s.record);
+  const blockDrag = useRef<
+    | { kind: "cap"; clipId: string; capId: string; startX: number; s0: number; e0: number }
+    | { kind: "text"; id: string; startX: number; s0: number; e0: number }
+    | null
+  >(null);
+
+  function onBlockMove(e: React.PointerEvent) {
+    const d = blockDrag.current;
+    if (!d) return;
+    const dt = (e.clientX - d.startX) / pxPerSec;
+    if (d.kind === "cap") setCaptionTiming(d.clipId, d.capId, d.s0 + dt, d.e0 + dt);
+    else updateText(d.id, { start: Math.max(0, d.s0 + dt), end: Math.max(0.05, d.e0 + dt) });
+  }
+  function onBlockUp(e: React.PointerEvent) {
+    if (blockDrag.current) (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+    blockDrag.current = null;
+  }
 
   function onInnerContextMenu(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest(".seg")) return; // clip menu handles its own
@@ -358,7 +378,16 @@ export default function Timeline() {
                   key={c.id}
                   className="seg caption-seg"
                   style={{ left: c.tStart * pxPerSec, width: Math.max(2, (c.tEnd - c.tStart) * pxPerSec) }}
-                  title={c.text}
+                  title={c.text + " — drag to move timing"}
+                  onPointerDown={(e) => {
+                    if (e.button !== 0) return;
+                    e.stopPropagation();
+                    record();
+                    blockDrag.current = { kind: "cap", clipId: c.clipId, capId: c.id, startX: e.clientX, s0: c.start, e0: c.end };
+                    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                  }}
+                  onPointerMove={onBlockMove}
+                  onPointerUp={onBlockUp}
                 >
                   <span className="cap-text">{c.text}</span>
                 </div>
@@ -377,10 +406,19 @@ export default function Timeline() {
                     left: t.start * pxPerSec,
                     width: Math.max(2, (t.end - t.start) * pxPerSec),
                   }}
-                  title={t.text + " — right-click for options"}
-                  onClick={(e) => {
+                  title={t.text + " — drag to move · right-click for options"}
+                  onPointerDown={(e) => {
+                    if (e.button !== 0) return;
                     e.stopPropagation();
                     selectText(t.id);
+                    record();
+                    blockDrag.current = { kind: "text", id: t.id, startX: e.clientX, s0: t.start, e0: t.end };
+                    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                  }}
+                  onPointerMove={onBlockMove}
+                  onPointerUp={onBlockUp}
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setPlayheadRaw(t.start + 0.05);
                   }}
                   onContextMenu={(e) => {
