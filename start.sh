@@ -40,6 +40,23 @@ if [ "${SKIP_BUILD:-0}" != "1" ]; then
   bunx vite build
 fi
 
+# --- handle a port already in use ---
+if lsof -ti "tcp:${PORT}" >/dev/null 2>&1; then
+  if curl -s "http://localhost:${PORT}/api/capabilities" >/dev/null 2>&1; then
+    # An instance of this app is already serving — just open it.
+    say "already running on http://localhost:${PORT} — opening browser"
+    (command -v open >/dev/null && open "http://localhost:${PORT}") || true
+    exit 0
+  fi
+  if [ "${FORCE_KILL:-0}" = "1" ]; then
+    warn "port ${PORT} busy — killing the process holding it (FORCE_KILL=1)"
+    lsof -ti "tcp:${PORT}" | xargs kill 2>/dev/null || true
+    sleep 0.5
+  else
+    die "port ${PORT} is in use by another process. Re-run with FORCE_KILL=1 ./start.sh to free it, or PORT=9000 ./start.sh to use another port."
+  fi
+fi
+
 # --- open browser shortly after the server boots ---
 ( sleep 1.2; (command -v open >/dev/null && open "http://localhost:${PORT}") || true ) &
 
