@@ -79,6 +79,11 @@ export default function Player() {
     return Math.max(0, Math.min(1, f));
   }
   const activeHit = locate(placed, playhead);
+  // Strict: is there actually a video clip under the playhead? In gaps / past the
+  // end there isn't — hide the base video so the black stage shows (no stale frame).
+  const videoVisible = placed.some(
+    (p) => p.dur > 0 && playhead >= p.start && playhead < p.start + p.dur,
+  );
   const fade = activeHit ? fadeFactor(activeHit.seg, playhead) : 1;
 
   // Text overlays visible at the playhead (plus the selected one, for editing).
@@ -322,7 +327,11 @@ export default function Player() {
           </div>
         ) : hasVideo ? (
           <>
-            <video ref={videoRef} playsInline style={{ filter: fxToCss(activeHit?.seg.fx) }} />
+            <video
+              ref={videoRef}
+              playsInline
+              style={{ filter: fxToCss(activeHit?.seg.fx), visibility: videoVisible ? "visible" : "hidden" }}
+            />
             <video
               ref={overlayRef}
               playsInline
