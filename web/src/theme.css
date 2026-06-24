@@ -734,6 +734,25 @@ body {
   gap: 16px;
 }
 
+/* subtitle split mode — clickable scissors between words */
+.subtitle.split-mode {
+  pointer-events: auto;
+  outline: 1px dashed var(--accent-0);
+}
+.subtitle.split-mode .cap-gap {
+  display: inline-block;
+  color: var(--accent-0);
+  cursor: pointer;
+  padding: 0 3px;
+  opacity: 0.55;
+  font-size: 0.75em;
+  vertical-align: middle;
+}
+.subtitle.split-mode .cap-gap:hover {
+  opacity: 1;
+  transform: scale(1.3);
+}
+
 /* subtitle overlay on the player */
 .subtitle {
   position: absolute;

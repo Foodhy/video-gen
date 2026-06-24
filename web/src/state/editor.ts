@@ -107,6 +107,7 @@ interface EditorState {
   folders: { id: string; name: string }[]; // media library folders
   folderOf: Record<string, string>; // assetId -> folderId
   snapEnabled: boolean;
+  captionSplitMode: boolean; // click-between-words in the preview to split a subtitle
   showCaptions: boolean;
   logs: LogEntry[];
   showLogs: boolean;
@@ -166,6 +167,8 @@ interface EditorState {
   ) => void;
   updateCaptionText: (clipId: string, capId: string, text: string) => void;
   setCaptionTiming: (clipId: string, capId: string, start: number, end: number) => void;
+  splitCaptionByWords: (clipId: string, capId: string, k: number) => void;
+  toggleCaptionSplitMode: () => void;
   clearCaptions: (clipId: string) => void;
   toggleCaptions: () => void;
   addText: () => void;
@@ -452,6 +455,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   folders: [],
   folderOf: {},
   snapEnabled: true,
+  captionSplitMode: false,
   showCaptions: true,
   logs: [],
   showLogs: false,
@@ -837,6 +841,27 @@ export const useEditor = create<EditorState>((set, get) => ({
         [clipId]: (s.captions[clipId] ?? []).map((c) => (c.id === capId ? { ...c, text } : c)),
       },
     })),
+  splitCaptionByWords: (clipId, capId, k) => {
+    get().record();
+    set((s) => {
+      const arr = s.captions[clipId] ?? [];
+      const idx = arr.findIndex((x) => x.id === capId);
+      if (idx < 0) return s;
+      const orig = arr[idx];
+      const words = orig.text.trim().split(/\s+/).filter(Boolean);
+      if (words.length < 2 || k < 1 || k >= words.length) return s;
+      const dur = orig.end - orig.start;
+      const cut = orig.start + (dur * k) / words.length; // remaining time goes to the 2nd
+      const rnd = Math.random().toString(36).slice(2, 6);
+      const left = { ...orig, id: orig.id + "_" + rnd + "a", end: cut, text: words.slice(0, k).join(" ") };
+      const right = { ...orig, id: orig.id + "_" + rnd + "b", start: cut, text: words.slice(k).join(" ") };
+      const next = [...arr];
+      next.splice(idx, 1, left, right);
+      return { captions: { ...s.captions, [clipId]: next } };
+    });
+  },
+  toggleCaptionSplitMode: () => set((s) => ({ captionSplitMode: !s.captionSplitMode })),
+
   setCaptionTiming: (clipId, capId, start, end) =>
     set((s) => ({
       captions: {

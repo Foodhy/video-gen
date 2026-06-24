@@ -30,11 +30,8 @@ export default function Timeline() {
   const setPlayhead = useEditor((s) => s.setPlayhead);
   const setZoom = useEditor((s) => s.setZoom);
   const splitAtPlayhead = useEditor((s) => s.splitAtPlayhead);
-  const splitCaptionAtPlayhead = useEditor((s) => s.splitCaptionAtPlayhead);
-  const splitAll = () => {
-    splitAtPlayhead();
-    splitCaptionAtPlayhead();
-  };
+  const captionSplitMode = useEditor((s) => s.captionSplitMode);
+  const toggleCaptionSplitMode = useEditor((s) => s.toggleCaptionSplitMode);
   const deleteSelected = useEditor((s) => s.deleteSelected);
   const deleteSegment = useEditor((s) => s.deleteSegment);
   const duplicateSegment = useEditor((s) => s.duplicateSegment);
@@ -173,7 +170,7 @@ export default function Timeline() {
   function bgMenuItems(): MenuItem[] {
     const allIds = segments.map((s) => s.id);
     return [
-      { label: "Split clip + subtitles at playhead", hint: "S", onClick: () => splitAll() },
+      { label: "Split clip at playhead", hint: "S", onClick: () => splitAtPlayhead() },
       { label: "Add text overlay here", onClick: () => addText() },
       { separator: true, label: "" },
       { label: "Select all clips", disabled: !allIds.length, onClick: () => setSelection(allIds) },
@@ -387,7 +384,7 @@ export default function Timeline() {
   return (
     <section className="timeline">
       <div className="tl-toolbar">
-        <button className="tl-btn" onClick={splitAll} title="Split clip + subtitles at playhead (S)">
+        <button className="tl-btn" onClick={splitAtPlayhead} title="Split clip at playhead (S)">
           ✂ Split
         </button>
         <button
@@ -397,6 +394,13 @@ export default function Timeline() {
           title="Delete selected (⌫)"
         >
           🗑 Delete{selCount > 1 ? ` (${selCount})` : ""}
+        </button>
+        <button
+          className={"tl-btn" + (captionSplitMode ? " on" : "")}
+          onClick={toggleCaptionSplitMode}
+          title="Subtitle split mode (X): click ✂ between words in the preview"
+        >
+          ✂ Sub-split
         </button>
         <button className="tl-btn" onClick={() => jumpEdit(-1)} title="Jump to previous edit (,)">
           ⇤ Prev

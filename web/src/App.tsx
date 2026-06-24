@@ -112,9 +112,10 @@ export default function App() {
       if (e.code === "Space") {
         e.preventDefault();
         setPlaying(!useEditor.getState().playing);
+      } else if (e.key === "x" || e.key === "X") {
+        useEditor.getState().toggleCaptionSplitMode();
       } else if (e.key === "s" || e.key === "S") {
         splitAtPlayhead();
-        useEditor.getState().splitCaptionAtPlayhead();
       } else if (e.key === "Backspace" || e.key === "Delete") {
         const st = useEditor.getState();
         if (st.selectedTextId) st.deleteText(st.selectedTextId);

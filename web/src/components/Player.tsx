@@ -42,6 +42,8 @@ export default function Player() {
   const record = useEditor((s) => s.record);
   const captions = useEditor((s) => s.captions);
   const showCaptions = useEditor((s) => s.showCaptions);
+  const captionSplitMode = useEditor((s) => s.captionSplitMode);
+  const splitCaptionByWords = useEditor((s) => s.splitCaptionByWords);
   const placed = placeTrack(segments, "video");
   const overlayPlaced = placeTrack(segments, "overlay");
   const audioPlaced = placeTrack(segments, "audio");
@@ -326,7 +328,30 @@ export default function Player() {
                 {t.text || " "}
               </div>
             ))}
-            {activeCap && <div className="subtitle">{activeCap.text}</div>}
+            {activeCap &&
+              (captionSplitMode ? (
+                <div className="subtitle split-mode" title="Click ✂ between words to split">
+                  {activeCap.text
+                    .trim()
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .map((w, i, arr) => (
+                      <span key={i}>
+                        <span className="cap-word">{w}</span>
+                        {i < arr.length - 1 && (
+                          <span
+                            className="cap-gap"
+                            onClick={() => splitCaptionByWords(activeCap.clipId, activeCap.id, i + 1)}
+                          >
+                            ✂
+                          </span>
+                        )}
+                      </span>
+                    ))}
+                </div>
+              ) : (
+                <div className="subtitle">{activeCap.text}</div>
+              ))}
           </>
         ) : (
           <div className="player-empty">

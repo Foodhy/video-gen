@@ -353,6 +353,19 @@ test("splitCaptionAtPlayhead cuts a caption into two at the playhead", () => {
   expect(caps[1]).toMatchObject({ start: 2, end: 4, text: "world" });
 });
 
+test("splitCaptionByWords splits text + remaining time at a word boundary", () => {
+  const s = useEditor.getState();
+  s.addAsset(asset("v", 10, "video"));
+  s.addSegmentForAsset("v");
+  s.setCaptions("v", [{ start: 0, end: 3, text: "a b c" }]);
+  const capId = useEditor.getState().captions["v"][0].id;
+  s.splitCaptionByWords("v", capId, 2); // first 2 words
+  const caps = useEditor.getState().captions["v"];
+  expect(caps).toHaveLength(2);
+  expect(caps[0]).toMatchObject({ start: 0, end: 2, text: "a b" }); // 3 * 2/3 = 2
+  expect(caps[1]).toMatchObject({ start: 2, end: 3, text: "c" });
+});
+
 test("setCaptionTiming moves a caption and clamps to >=0", () => {
   const s = useEditor.getState();
   s.addAsset(asset("v", 10, "video"));
