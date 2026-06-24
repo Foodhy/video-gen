@@ -118,7 +118,9 @@ export default function App() {
       } else if (e.key === "s" || e.key === "S") {
         splitAtPlayhead();
       } else if (e.key === "Backspace" || e.key === "Delete") {
-        deleteSelected();
+        const st = useEditor.getState();
+        if (st.selectedTextId) st.deleteText(st.selectedTextId);
+        else deleteSelected();
       } else if (e.key === "Home") {
         e.preventDefault();
         useEditor.getState().setPlayhead(0);

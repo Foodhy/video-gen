@@ -62,7 +62,10 @@ export default function Timeline() {
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const marqueeMoved = useRef(false);
   const [bgMenu, setBgMenu] = useState<{ x: number; y: number } | null>(null);
+  const [textMenu, setTextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const addText = useEditor((s) => s.addText);
+  const deleteText = useEditor((s) => s.deleteText);
+  const selectTextFn = useEditor((s) => s.selectText);
 
   function onInnerContextMenu(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest(".seg")) return; // clip menu handles its own
@@ -374,11 +377,17 @@ export default function Timeline() {
                     left: t.start * pxPerSec,
                     width: Math.max(2, (t.end - t.start) * pxPerSec),
                   }}
-                  title={t.text}
+                  title={t.text + " — right-click for options"}
                   onClick={(e) => {
                     e.stopPropagation();
                     selectText(t.id);
                     setPlayheadRaw(t.start + 0.05);
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    selectText(t.id);
+                    setTextMenu({ x: e.clientX, y: e.clientY, id: t.id });
                   }}
                 >
                   <span className="cap-text">T · {t.text}</span>
@@ -401,6 +410,18 @@ export default function Timeline() {
       )}
       {bgMenu && (
         <ContextMenu x={bgMenu.x} y={bgMenu.y} items={bgMenuItems()} onClose={() => setBgMenu(null)} />
+      )}
+      {textMenu && (
+        <ContextMenu
+          x={textMenu.x}
+          y={textMenu.y}
+          items={[
+            { label: "Edit text (inspector)", onClick: () => selectTextFn(textMenu.id) },
+            { separator: true, label: "" },
+            { label: "Delete text", danger: true, onClick: () => deleteText(textMenu.id) },
+          ]}
+          onClose={() => setTextMenu(null)}
+        />
       )}
       {marquee && marqueeMoved.current && (
         <div

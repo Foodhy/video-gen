@@ -471,8 +471,10 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   selectAsset: (id) => set({ selectedAssetId: id }),
-  selectSegment: (id) => set({ selectedSegmentId: id, selectedIds: id ? [id] : [] }),
-  setSelection: (ids) => set({ selectedIds: ids, selectedSegmentId: ids[0] ?? null }),
+  selectSegment: (id) =>
+    set({ selectedSegmentId: id, selectedIds: id ? [id] : [], selectedTextId: null }),
+  setSelection: (ids) =>
+    set({ selectedIds: ids, selectedSegmentId: ids[0] ?? null, selectedTextId: null }),
 
   splitAtPlayhead: () => {
     const t0 = get().playhead;
