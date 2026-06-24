@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useEditor,
   placeTrack,
@@ -12,11 +12,21 @@ import {
 } from "../state/editor.ts";
 import { tc } from "../lib/format.ts";
 import { logger } from "../lib/logger.ts";
+import MasterMeter from "./MasterMeter.tsx";
+import { registerElement, resume as resumeAudio } from "../lib/audioGraph.ts";
 
 export default function Player() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
+  const [monitor, setMonitor] = useState(false);
+  // When the monitor is on, route the player's media into the Web Audio graph.
+  useEffect(() => {
+    if (!monitor) return;
+    registerElement(videoRef.current);
+    registerElement(audioElRef.current);
+    resumeAudio();
+  }, [monitor]);
   function toggleFullscreen() {
     const el = sectionRef.current;
     if (!el) return;
@@ -230,6 +240,11 @@ export default function Player() {
       audioElRef.current?.pause();
       return;
     }
+    if (monitor) {
+      registerElement(videoRef.current);
+      registerElement(audioElRef.current);
+      resumeAudio();
+    }
     let raf = 0;
     let last = performance.now();
     // align media to current playhead immediately
@@ -272,8 +287,15 @@ export default function Player() {
           {assets[locate(placed, playhead)?.seg.clipId ?? ""]?.height ?? "—"}
         </span>
         <button
-          className="transport"
+          className={"transport" + (monitor ? " on" : "")}
           style={{ marginLeft: 10 }}
+          onClick={() => setMonitor((m) => !m)}
+          title="Master audio monitor (levels + mono/stereo) — does not affect export"
+        >
+          🎚
+        </button>
+        <button
+          className="transport"
           onClick={toggleFullscreen}
           title="Fullscreen player (see it bigger)"
         >
@@ -365,6 +387,7 @@ export default function Player() {
           </div>
         )}
         {hasAudioTrack && <audio ref={audioElRef} style={{ display: "none" }} />}
+        {monitor && <MasterMeter onClose={() => setMonitor(false)} />}
       </div>
       <div className="player-bar">
         <button className="transport" onClick={() => seekTo(0)} disabled={!hasContent} title="Go to start (Home)">
