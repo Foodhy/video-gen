@@ -102,6 +102,7 @@ interface EditorState {
   deleteSegment: (id: string) => void;
   deleteSelected: () => void;
   duplicateSegment: (id: string) => void;
+  moveSegmentBefore: (id: string, beforeId: string | null) => void;
   toggleMute: (id: string) => void;
   setFade: (id: string, patch: { fadeIn?: number; fadeOut?: number }) => void;
   setXfade: (id: string, secs: number) => void;
@@ -447,6 +448,21 @@ export const useEditor = create<EditorState>((set, get) => ({
       const next = [...s.segments];
       next.splice(idx + 1, 0, copy);
       return { segments: next, selectedSegmentId: copy.id };
+    });
+  },
+
+  moveSegmentBefore: (id, beforeId) => {
+    if (id === beforeId) return;
+    get().record();
+    set((s) => {
+      const arr = [...s.segments];
+      const from = arr.findIndex((x) => x.id === id);
+      if (from < 0) return s;
+      const [item] = arr.splice(from, 1);
+      let to = beforeId ? arr.findIndex((x) => x.id === beforeId) : arr.length;
+      if (to < 0) to = arr.length;
+      arr.splice(to, 0, item);
+      return { segments: arr, selectedSegmentId: id };
     });
   },
 

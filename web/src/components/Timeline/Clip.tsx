@@ -1,12 +1,14 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useEditor, hasFx, type PlacedSegment } from "../../state/editor.ts";
 
 export default function Clip({
   placed,
   onContext,
+  onReorder,
 }: {
   placed: PlacedSegment;
   onContext?: (placed: PlacedSegment, x: number, y: number) => void;
+  onReorder?: (id: string, dropCenterSec: number) => void;
 }) {
   const pxPerSec = useEditor((s) => s.pxPerSec);
   const assets = useEditor((s) => s.assets);
@@ -17,6 +19,8 @@ export default function Clip({
   const dragState = useRef<{ side: "l" | "r"; startX: number; in0: number; out0: number } | null>(
     null,
   );
+  const moveRef = useRef<{ startX: number; moved: boolean } | null>(null);
+  const [dragDX, setDragDX] = useState(0);
 
   const asset = assets[placed.clipId];
   const left = placed.start * pxPerSec;
@@ -44,13 +48,42 @@ export default function Clip({
     }
   }
 
+  // Body drag = reorder within the track.
+  function onBodyDown(e: React.PointerEvent) {
+    if (e.button !== 0) return;
+    selectSegment(placed.id);
+    moveRef.current = { startX: e.clientX, moved: false };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+  function onBodyMove(e: React.PointerEvent) {
+    const m = moveRef.current;
+    if (!m) return;
+    const dx = e.clientX - m.startX;
+    if (Math.abs(dx) > 3) m.moved = true;
+    setDragDX(dx);
+  }
+  function onBodyUp(e: React.PointerEvent) {
+    const m = moveRef.current;
+    moveRef.current = null;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    if (m?.moved) {
+      const centerSec = (left + dragDX + width / 2) / pxPerSec;
+      onReorder?.(placed.id, centerSec);
+    }
+    setDragDX(0);
+  }
+
   const isAudio = placed.track === "audio";
   const thumbs = asset?.thumbs ?? [];
+  const dragging = !!moveRef.current && dragDX !== 0;
 
   return (
     <div
-      className={"seg" + (selected ? " sel" : "") + (isAudio ? " audio" : "")}
-      style={{ left, width }}
+      className={"seg" + (selected ? " sel" : "") + (isAudio ? " audio" : "") + (dragging ? " dragging" : "")}
+      style={{ left, width, transform: dragDX ? `translateX(${dragDX}px)` : undefined }}
+      onPointerDown={onBodyDown}
+      onPointerMove={onBodyMove}
+      onPointerUp={onBodyUp}
       onClick={(e) => {
         e.stopPropagation();
         selectSegment(placed.id);

@@ -34,6 +34,15 @@ export default function Timeline() {
   const setXfade = useEditor((s) => s.setXfade);
   const setFx = useEditor((s) => s.setFx);
   const clearFx = useEditor((s) => s.clearFx);
+  const moveSegmentBefore = useEditor((s) => s.moveSegmentBefore);
+
+  function reorder(id: string, dropCenterSec: number) {
+    const seg = segments.find((x) => x.id === id);
+    if (!seg) return;
+    const others = placeTrack(segments, seg.track).filter((p) => p.id !== id);
+    const before = others.find((o) => o.start + o.dur / 2 > dropCenterSec);
+    moveSegmentBefore(id, before?.id ?? null);
+  }
   const projectId = useEditor((s) => s.projectId);
   const assets = useEditor((s) => s.assets);
   const addAsset = useEditor((s) => s.addAsset);
@@ -213,10 +222,12 @@ export default function Timeline() {
           <Track
             kind="video"
             onClipContext={(seg, x, y) => setMenu({ x, y, seg })}
+            onReorder={reorder}
           />
           <Track
             kind="audio"
             onClipContext={(seg, x, y) => setMenu({ x, y, seg })}
+            onReorder={reorder}
           />
 
           {placedCaps.length > 0 && (

@@ -4,9 +4,11 @@ import Clip from "./Clip.tsx";
 export default function Track({
   kind,
   onClipContext,
+  onReorder,
 }: {
   kind: TrackKind;
   onClipContext?: (placed: PlacedSegment, x: number, y: number) => void;
+  onReorder?: (id: string, dropCenterSec: number) => void;
 }) {
   const segments = useEditor((s) => s.segments);
   const placed = placeTrack(segments, kind);
@@ -15,7 +17,7 @@ export default function Track({
     <div className={"tl-track" + (kind === "audio" ? " audio" : "")}>
       <span className="tl-track-label">{kind === "audio" ? "A1 — Audio" : "V1 — Video"}</span>
       {placed.map((p) => (
-        <Clip key={p.id} placed={p} onContext={onClipContext} />
+        <Clip key={p.id} placed={p} onContext={onClipContext} onReorder={onReorder} />
       ))}
     </div>
   );
