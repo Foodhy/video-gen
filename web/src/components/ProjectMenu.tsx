@@ -6,10 +6,13 @@ import {
   loadProject,
   deleteProject,
   type ProjectSummary,
+  type ProjectSettings,
 } from "../lib/api.ts";
+import NewProjectModal from "./NewProjectModal.tsx";
 
 export default function ProjectMenu() {
   const [open, setOpen] = useState(false);
+  const [showNew, setShowNew] = useState(false);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [root, setRoot] = useState("");
   const projectId = useEditor((s) => s.projectId);
@@ -30,12 +33,13 @@ export default function ProjectMenu() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, projectId]);
 
-  async function onNew() {
+  async function onCreate(settings: ProjectSettings) {
+    setShowNew(false);
     setOpen(false);
     try {
-      const pid = await createProject();
+      const pid = await createProject(settings);
       useEditor.getState().resetTo(pid);
-      showToast("New project — stored in workspace/" + pid);
+      showToast(`New project "${settings.name}" (${settings.width}×${settings.height})`);
     } catch (e: any) {
       showToast(e.message ?? "create failed", true);
     }
@@ -94,8 +98,14 @@ export default function ProjectMenu() {
         <>
           <div className="proj-backdrop" onClick={() => setOpen(false)} />
           <div className="proj-drop">
-            <button className="proj-new" onClick={onNew}>
-              + New Project
+            <button
+              className="proj-new"
+              onClick={() => {
+                setOpen(false);
+                setShowNew(true);
+              }}
+            >
+              + New Project…
             </button>
             <div className="proj-list">
               {projects.length === 0 ? (
@@ -126,6 +136,7 @@ export default function ProjectMenu() {
           </div>
         </>
       )}
+      {showNew && <NewProjectModal onCreate={onCreate} onClose={() => setShowNew(false)} />}
     </div>
   );
 }

@@ -294,6 +294,7 @@ export async function render(
   texts?: BurnText[],
   overlays?: OverlayItem[],
   audioTrack?: EdlSegment[], // A1 track — when present, becomes the output audio
+  target?: { width?: number; height?: number; fps?: number }, // forced export resolution
 ): Promise<void> {
   await mkdir(tmpDir, { recursive: true });
   const totalDur = segments.reduce((s, seg) => s + Math.max(0, seg.out - seg.in), 0);
@@ -313,7 +314,19 @@ export async function render(
     // Build video + audio filter chains for fades / mute.
     const fi = Math.min(seg.fadeIn ?? 0, dur);
     const fo = Math.min(seg.fadeOut ?? 0, dur);
-    const vf: string[] = [...fxFilters(seg.fx)]; // color/blur before fades
+    const vf: string[] = [];
+    // Force the export resolution first (scale-to-fit + pad/letterbox), so all
+    // parts share one size for concat/xfade and match the chosen project resolution.
+    if (target?.width && target?.height) {
+      const W = target.width, H = target.height;
+      vf.push(
+        `scale=${W}:${H}:force_original_aspect_ratio=decrease`,
+        `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black`,
+        `setsar=1`,
+      );
+    }
+    if (target?.fps) vf.push(`fps=${target.fps}`);
+    vf.push(...fxFilters(seg.fx)); // color/blur
     const af: string[] = [];
     if (fi > 0) {
       vf.push(`fade=t=in:st=0:d=${fi}`);

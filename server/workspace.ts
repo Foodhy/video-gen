@@ -21,10 +21,18 @@ export interface ClipMeta {
   thumbs?: string[]; // relative thumb filenames (under thumbs/<id>/)
 }
 
+export interface ProjectSettings {
+  name?: string;
+  width?: number; // export resolution
+  height?: number;
+  fps?: number;
+}
+
 export interface Project {
   id: string;
   createdAt: number;
   clips: ClipMeta[];
+  settings?: ProjectSettings;
   doc?: unknown; // opaque editor document (segments, captions) — owned by client
 }
 
@@ -58,9 +66,9 @@ export function resolveMedia(projectId: string, file: string): string | null {
 
 const metaPath = (id: string) => join(projectDir(id), "project.json");
 
-export async function createProject(): Promise<Project> {
+export async function createProject(settings?: ProjectSettings): Promise<Project> {
   const id = rid("proj");
-  const project: Project = { id, createdAt: Date.now(), clips: [] };
+  const project: Project = { id, createdAt: Date.now(), clips: [], settings };
   await mkdir(sourceDir(id), { recursive: true });
   await mkdir(derivedDir(id), { recursive: true });
   await mkdir(outputDir(id), { recursive: true });
@@ -85,8 +93,9 @@ export interface ProjectSummary {
   id: string;
   createdAt: number;
   clipCount: number;
-  name: string; // first clip name, or "Untitled"
+  name: string; // project name, first clip name, or "Untitled"
   dir: string; // absolute storage path
+  settings?: ProjectSettings;
 }
 
 // List all projects, newest first.
@@ -103,8 +112,13 @@ export async function listProjects(): Promise<ProjectSummary[]> {
         id: p.id,
         createdAt: p.createdAt ?? (await stat(meta)).mtimeMs,
         clipCount: p.clips.length,
-        name: p.clips.find((c) => c.kind === "video")?.name ?? p.clips[0]?.name ?? "Untitled",
+        name:
+          p.settings?.name ||
+          p.clips.find((c) => c.kind === "video")?.name ||
+          p.clips[0]?.name ||
+          "Untitled",
         dir: projectDir(id),
+        settings: p.settings,
       });
     } catch {
       /* skip corrupt project.json */

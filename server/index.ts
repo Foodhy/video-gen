@@ -66,7 +66,8 @@ const server = Bun.serve({
     try {
       // ---- API ----
       if (path === "/api/projects" && req.method === "POST") {
-        const p = await createProject();
+        const settings = await req.json().catch(() => undefined);
+        const p = await createProject(settings && typeof settings === "object" ? settings : undefined);
         return json({ projectId: p.id });
       }
 
@@ -399,6 +400,7 @@ async function handleExport(req: Request): Promise<Response> {
         (p) => updateJob(job.id, { progress: p }),
         burnSubtitles, texts, overlayItems,
         audioItems.length ? audioItems : undefined,
+        project.settings?.width && project.settings?.height ? project.settings : undefined,
       );
       updateJob(job.id, {
         status: "done",

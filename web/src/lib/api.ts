@@ -156,8 +156,19 @@ export async function deleteProject(id: string): Promise<void> {
   if (!res.ok) throw new Error("delete project failed");
 }
 
-export async function createProject(): Promise<string> {
-  const res = await apiFetch("/api/projects", { method: "POST" });
+export interface ProjectSettings {
+  name?: string;
+  width?: number;
+  height?: number;
+  fps?: number;
+}
+
+export async function createProject(settings?: ProjectSettings): Promise<string> {
+  const res = await apiFetch("/api/projects", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(settings ?? {}),
+  });
   if (!res.ok) throw new Error("create project failed");
   return (await res.json()).projectId;
 }
