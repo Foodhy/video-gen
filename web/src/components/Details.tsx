@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useEditor, type Asset } from "../state/editor.ts";
+import { useEditor, FX_PRESETS, type Asset } from "../state/editor.ts";
 import { separateAudio, transcribe, translateLines, getCapabilities } from "../lib/api.ts";
 import { tc, bytes } from "../lib/format.ts";
 
@@ -47,6 +47,7 @@ export default function Details() {
   const setFade = useEditor((s) => s.setFade);
   const setFx = useEditor((s) => s.setFx);
   const clearFx = useEditor((s) => s.clearFx);
+  const applyFxPreset = useEditor((s) => s.applyFxPreset);
   const texts = useEditor((s) => s.texts);
   const selectedTextId = useEditor((s) => s.selectedTextId);
   const updateText = useEditor((s) => s.updateText);
@@ -260,6 +261,18 @@ export default function Details() {
                   <button className="cap-clear" onClick={() => clearFx(seg.id)} title="Reset effects">
                     reset
                   </button>
+                </div>
+                <div className="fx-presets">
+                  {FX_PRESETS.map((p) => (
+                    <button
+                      key={p.name}
+                      className="fx-preset"
+                      onClick={() => applyFxPreset(seg.id, p.fx)}
+                      title={`Apply ${p.name} look`}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
                 </div>
                 {(
                   [

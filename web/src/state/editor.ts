@@ -107,6 +107,7 @@ interface EditorState {
   setFade: (id: string, patch: { fadeIn?: number; fadeOut?: number }) => void;
   setXfade: (id: string, secs: number) => void;
   setFx: (id: string, patch: Partial<Fx>) => void;
+  applyFxPreset: (id: string, fx: Fx | undefined) => void;
   clearFx: (id: string) => void;
   setPlayhead: (t: number) => void;
   setPlaying: (p: boolean) => void;
@@ -261,6 +262,19 @@ export function fxToCss(fx: Fx | undefined): string {
   if (fx.blur) parts.push(`blur(${fx.blur}px)`);
   return parts.length ? parts.join(" ") : "none";
 }
+
+// One-click color looks (built on the same Fx engine: CSS preview + ffmpeg eq).
+export const FX_PRESETS: { name: string; fx: Fx | undefined }[] = [
+  { name: "None", fx: undefined },
+  { name: "Cinematic", fx: { contrast: 1.25, saturation: 1.1, brightness: -0.05 } },
+  { name: "Warm", fx: { saturation: 1.25, brightness: 0.06, contrast: 1.05 } },
+  { name: "Cold", fx: { saturation: 0.8, brightness: -0.04, contrast: 1.1 } },
+  { name: "Vivid", fx: { saturation: 1.6, contrast: 1.2 } },
+  { name: "Vintage", fx: { saturation: 0.6, contrast: 0.9, brightness: 0.05 } },
+  { name: "Noir", fx: { grayscale: true, contrast: 1.4 } },
+  { name: "B&W", fx: { grayscale: true } },
+  { name: "Dreamy", fx: { blur: 2, brightness: 0.08, saturation: 1.15 } },
+];
 
 export function hasFx(fx: Fx | undefined): boolean {
   if (!fx) return false;
@@ -503,6 +517,12 @@ export const useEditor = create<EditorState>((set, get) => ({
     get().record();
     set((s) => ({
       segments: s.segments.map((x) => (x.id === id ? { ...x, fx: { ...x.fx, ...patch } } : x)),
+    }));
+  },
+  applyFxPreset: (id, fx) => {
+    get().record();
+    set((s) => ({
+      segments: s.segments.map((x) => (x.id === id ? { ...x, fx: fx ? { ...fx } : undefined } : x)),
     }));
   },
   clearFx: (id) => {

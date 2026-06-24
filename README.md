@@ -92,4 +92,6 @@ and `+ New Project` starts a fresh one. Backed by `GET/POST /api/projects`.
 - **Crossfade between clips** — right-click → *Crossfade with next*. Clips overlap on the timeline; export dissolves video (`xfade`) + audio (`acrossfade`). Boundaries without a crossfade stay hard cuts. Badge `⤬` marks a crossfade.
 
 ## Phase 5 — Effects / filters (built)
-Per-clip color + blur. Select a segment → Details *Effects*: brightness, contrast, saturation, blur sliders + Black & white toggle (also in the right-click menu). Live CSS-filter preview on the player; export bakes them via ffmpeg `eq` + `gblur`. Badge `✦` marks a clip with effects. Undoable + persisted.
+Per-clip color + blur. Select a segment → Details *Effects*: brightness, contrast, saturation, blur sliders + Black & white toggle (also in the right-click menu). One-click **presets** (Cinematic, Warm, Cold, Vivid, Vintage, Noir, B&W, Dreamy). Live CSS-filter preview on the player; export bakes them via ffmpeg `eq` + `gblur`. Badge `✦` marks a clip with effects. Undoable + persisted.
+
+Clips can be **drag-reordered** on the timeline (drag a clip body; drop position by clip center).
