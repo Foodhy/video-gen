@@ -94,10 +94,27 @@ export async function extractAudioRange(
   if (code !== 0) throw new Error("extractAudioRange failed: " + stderr);
 }
 
+// atempo only accepts 0.5..2.0 — chain factors to reach any speed.
+function atempoChain(speed: number): string {
+  let s = speed;
+  const parts: string[] = [];
+  while (s > 2.0) {
+    parts.push("atempo=2.0");
+    s /= 2;
+  }
+  while (s < 0.5) {
+    parts.push("atempo=0.5");
+    s *= 2;
+  }
+  parts.push(`atempo=${s.toFixed(4)}`);
+  return parts.join(",");
+}
+
 export interface EdlSegment {
   src: string; // absolute path to source media
   in: number; // seconds
   out: number; // seconds
+  speed?: number; // playback speed (1 = normal)
   muted?: boolean; // silence this segment's audio
   fadeIn?: number; // seconds — video+audio fade in
   fadeOut?: number; // seconds — video+audio fade out
@@ -311,9 +328,11 @@ export async function render(
       "-ss", String(seg.in), "-i", seg.src, "-t", String(dur),
     ];
 
-    // Build video + audio filter chains for fades / mute.
-    const fi = Math.min(seg.fadeIn ?? 0, dur);
-    const fo = Math.min(seg.fadeOut ?? 0, dur);
+    // Speed: retime video (setpts) + audio (atempo). Output length = dur / speed.
+    const speed = seg.speed && seg.speed > 0 ? seg.speed : 1;
+    const outDur = dur / speed; // fade positions are in OUTPUT time
+    const fi = Math.min(seg.fadeIn ?? 0, outDur);
+    const fo = Math.min(seg.fadeOut ?? 0, outDur);
     const vf: string[] = [];
     // Force the export resolution first (scale-to-fit + pad/letterbox), so all
     // parts share one size for concat/xfade and match the chosen project resolution.
@@ -328,13 +347,17 @@ export async function render(
     if (target?.fps) vf.push(`fps=${target.fps}`);
     vf.push(...fxFilters(seg.fx)); // color/blur
     const af: string[] = [];
+    if (speed !== 1) {
+      vf.push(`setpts=PTS/${speed}`);
+      af.push(atempoChain(speed));
+    }
     if (fi > 0) {
       vf.push(`fade=t=in:st=0:d=${fi}`);
       af.push(`afade=t=in:st=0:d=${fi}`);
     }
     if (fo > 0) {
-      vf.push(`fade=t=out:st=${Math.max(0, dur - fo)}:d=${fo}`);
-      af.push(`afade=t=out:st=${Math.max(0, dur - fo)}:d=${fo}`);
+      vf.push(`fade=t=out:st=${Math.max(0, outDur - fo)}:d=${fo}`);
+      af.push(`afade=t=out:st=${Math.max(0, outDur - fo)}:d=${fo}`);
     }
     if (seg.muted) af.push("volume=0"); // silence overrides audio fades
     if (vf.length) args.push("-vf", vf.join(","));

@@ -74,6 +74,7 @@ export interface ExportEdlItem {
   clipId: string;
   in: number;
   out: number;
+  speed?: number;
   muted?: boolean;
   fadeIn?: number;
   fadeOut?: number;

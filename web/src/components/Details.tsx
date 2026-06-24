@@ -45,6 +45,7 @@ export default function Details() {
   const updateCaptionText = useEditor((s) => s.updateCaptionText);
   const clearCaptions = useEditor((s) => s.clearCaptions);
   const setFade = useEditor((s) => s.setFade);
+  const setSpeed = useEditor((s) => s.setSpeed);
   const setFx = useEditor((s) => s.setFx);
   const clearFx = useEditor((s) => s.clearFx);
   const applyFxPreset = useEditor((s) => s.applyFxPreset);
@@ -372,6 +373,29 @@ export default function Details() {
                     ) : null}
                   </>
                 ) : null}
+
+                <div style={{ height: 8 }} />
+                <span className="label">Speed — {(seg.speed ?? 1).toFixed(2)}×</span>
+                <div className="fx-presets">
+                  {[0.25, 0.5, 1, 1.5, 2, 4].map((v) => (
+                    <button
+                      key={v}
+                      className={"fx-preset" + ((seg.speed ?? 1) === v ? " on" : "")}
+                      onClick={() => setSpeed(seg.id, v)}
+                    >
+                      {v}×
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="range"
+                  min={0.25}
+                  max={4}
+                  step={0.05}
+                  value={seg.speed ?? 1}
+                  onChange={(e) => setSpeed(seg.id, Number(e.target.value))}
+                  style={{ width: "100%" }}
+                />
 
                 <div style={{ height: 8 }} />
                 <span className="label">Transitions — fade (sec)</span>

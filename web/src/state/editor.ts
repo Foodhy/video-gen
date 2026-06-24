@@ -17,6 +17,7 @@ export interface Segment {
   in: number; // source seconds
   out: number; // source seconds
   start?: number; // explicit timeline position (sec). If unset, stacked after previous.
+  speed?: number; // playback speed (1 = normal, <1 slow-mo, >1 fast)
   muted?: boolean; // silence this segment's audio (preview + export)
   fadeIn?: number; // seconds — fade from black + audio fade-in at segment start
   fadeOut?: number; // seconds — fade to black + audio fade-out at segment end
@@ -146,6 +147,7 @@ interface EditorState {
   duplicateSegment: (id: string) => void;
   moveSegmentBefore: (id: string, beforeId: string | null) => void;
   setSegmentStart: (id: string, start: number) => void;
+  setSpeed: (id: string, speed: number) => void;
   sendToTrack: (id: string, track: TrackKind) => void;
   setOverlayTransform: (
     id: string,
@@ -279,7 +281,7 @@ export function placeTrack(segments: Segment[], track: TrackKind): PlacedSegment
   const out: PlacedSegment[] = [];
   let cursor = 0;
   for (const s of onTrack) {
-    const dur = Math.max(0, s.out - s.in);
+    const dur = Math.max(0, s.out - s.in) / (s.speed && s.speed > 0 ? s.speed : 1);
     const start = s.start ?? cursor;
     out.push({ ...s, start, dur });
     cursor = start + dur;
@@ -346,11 +348,12 @@ export function placeCaptions(
       const s = Math.max(c.start, seg.in);
       const e = Math.min(c.end, seg.out);
       if (e <= s) continue; // caption falls outside this trimmed segment
+      const sp = seg.speed && seg.speed > 0 ? seg.speed : 1;
       out.push({
         ...c,
         clipId: seg.clipId,
-        tStart: seg.start + (s - seg.in),
-        tEnd: seg.start + (e - seg.in),
+        tStart: seg.start + (s - seg.in) / sp,
+        tEnd: seg.start + (e - seg.in) / sp,
       });
     }
   }
@@ -419,7 +422,7 @@ export function locate(
 ): { seg: PlacedSegment; srcTime: number } | null {
   for (const p of placed) {
     if (p.dur > 0 && t >= p.start && t < p.start + p.dur) {
-      return { seg: p, srcTime: p.in + (t - p.start) };
+      return { seg: p, srcTime: p.in + (t - p.start) * (p.speed ?? 1) };
     }
   }
   // Past the end: clamp to the last NON-degenerate segment (hold its last frame).
@@ -766,6 +769,15 @@ export const useEditor = create<EditorState>((set, get) => ({
     set((s) => ({
       segments: s.segments.map((x) => (x.id === id ? { ...x, start: Math.max(0, start) } : x)),
     })),
+
+  setSpeed: (id, speed) => {
+    get().record();
+    set((s) => ({
+      segments: s.segments.map((x) =>
+        x.id === id ? { ...x, speed: Math.max(0.25, Math.min(4, speed)) } : x,
+      ),
+    }));
+  },
 
   toggleMute: (id) => {
     get().record();

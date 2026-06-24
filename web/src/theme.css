@@ -1325,6 +1325,17 @@ body {
   pointer-events: none;
   text-shadow: 0 1px 2px #000;
 }
+.seg-speed {
+  position: absolute;
+  bottom: 2px;
+  left: 4px;
+  z-index: 3;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--accent-0);
+  pointer-events: none;
+  text-shadow: 0 1px 2px #000;
+}
 .fx-presets {
   display: flex;
   flex-wrap: wrap;

@@ -299,6 +299,7 @@ interface ExportBody {
     clipId: string;
     in: number;
     out: number;
+    speed?: number;
     muted?: boolean;
     fadeIn?: number;
     fadeOut?: number;
@@ -323,6 +324,7 @@ interface ExportBody {
     clipId: string;
     in: number;
     out: number;
+    speed?: number;
     muted?: boolean;
     fadeIn?: number;
     fadeOut?: number;
@@ -346,6 +348,7 @@ async function handleExport(req: Request): Promise<Response> {
       src: abs,
       in: s.in,
       out: s.out,
+      speed: s.speed,
       muted: s.muted,
       fadeIn: s.fadeIn,
       fadeOut: s.fadeOut,
@@ -379,6 +382,7 @@ async function handleExport(req: Request): Promise<Response> {
       src: resolveMedia(projectId, clip.file)!,
       in: a.in,
       out: a.out,
+      speed: a.speed,
       muted: a.muted,
       fadeIn: a.fadeIn,
       fadeOut: a.fadeOut,

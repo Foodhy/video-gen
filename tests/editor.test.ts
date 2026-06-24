@@ -77,6 +77,15 @@ test("placeTrack sorts by start", () => {
   expect(p.map((x) => x.id)).toEqual(["b", "a"]);
 });
 
+test("speed changes placed duration and source mapping", () => {
+  // 4s source at 2x -> 2s on the timeline; at 0.5x -> 8s
+  expect(placeTrack([seg("a", 0, 4, { start: 0, speed: 2 })], "video")[0].dur).toBe(2);
+  expect(placeTrack([seg("a", 0, 4, { start: 0, speed: 0.5 })], "video")[0].dur).toBe(8);
+  // locate maps timeline time back to source accounting for speed
+  const p = placeTrack([seg("a", 0, 4, { start: 0, speed: 2 })], "video");
+  expect(locate(p, 1)?.srcTime).toBe(2); // 1s timeline * 2x = 2s source
+});
+
 test("timelineDuration uses the max clip end (free positions)", () => {
   expect(timelineDuration([seg("a", 0, 2, { start: 10 })])).toBe(12);
 });

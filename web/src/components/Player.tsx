@@ -111,6 +111,7 @@ export default function Player() {
     const a1Here = !!locate(audioPlaced, t);
     v.muted = !!hit.seg.muted || a1Here;
     v.volume = fadeFactor(hit.seg, t); // audio fade in/out
+    v.playbackRate = hit.seg.speed ?? 1;
     if (loadedClip.current !== asset.id) {
       loadedClip.current = asset.id;
       v.src = asset.mediaUrl;
@@ -141,6 +142,7 @@ export default function Player() {
     }
     const asset = assets[hit.seg.clipId];
     if (!asset) return;
+    v.playbackRate = hit.seg.speed ?? 1;
     if (loadedOverlay.current !== asset.id) {
       loadedOverlay.current = asset.id;
       v.src = asset.mediaUrl;
@@ -170,6 +172,7 @@ export default function Player() {
     }
     const asset = assets[hit.seg.clipId];
     if (!asset) return;
+    a.playbackRate = hit.seg.speed ?? 1;
     a.volume = fadeFactor(hit.seg, t) * (hit.seg.muted ? 0 : 1);
     if (loadedAudio.current !== asset.id) {
       loadedAudio.current = asset.id;

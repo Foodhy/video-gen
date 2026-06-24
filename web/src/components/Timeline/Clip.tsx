@@ -128,6 +128,9 @@ export default function Clip({
           ✦
         </span>
       ) : null}
+      {placed.speed && placed.speed !== 1 ? (
+        <span className="seg-speed" title={`Speed ${placed.speed}×`}>{placed.speed}×</span>
+      ) : null}
       {placed.fadeIn ? (
         <div
           className="fade-tri l"
