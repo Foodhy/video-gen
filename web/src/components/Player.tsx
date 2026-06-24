@@ -22,6 +22,9 @@ export default function Player() {
   const setPlayhead = useEditor((s) => s.setPlayhead);
   const setPlaying = useEditor((s) => s.setPlaying);
 
+  const previewAssetId = useEditor((s) => s.previewAssetId);
+  const setPreview = useEditor((s) => s.setPreview);
+  const previewAsset = previewAssetId ? assets[previewAssetId] : null;
   const texts = useEditor((s) => s.texts);
   const selectedTextId = useEditor((s) => s.selectedTextId);
   const updateText = useEditor((s) => s.updateText);
@@ -296,7 +299,24 @@ export default function Player() {
         </span>
       </div>
       <div className="player-stage" ref={stageRef}>
-        {hasVideo ? (
+        {previewAsset ? (
+          <div className="preview-layer">
+            <div className="preview-bar">
+              <span className="label">Preview — {previewAsset.name}</span>
+              <button className="clog-btn" onClick={() => setPreview(null)}>
+                ✕ close
+              </button>
+            </div>
+            {previewAsset.kind === "audio" ? (
+              <div className="preview-audio">
+                <span style={{ fontSize: 48, color: "var(--text-muted)" }}>♪</span>
+                <audio src={previewAsset.mediaUrl} controls autoPlay />
+              </div>
+            ) : (
+              <video src={previewAsset.mediaUrl} controls autoPlay className="preview-video" />
+            )}
+          </div>
+        ) : hasVideo ? (
           <>
             <video ref={videoRef} playsInline style={{ filter: fxToCss(activeHit?.seg.fx) }} />
             <video

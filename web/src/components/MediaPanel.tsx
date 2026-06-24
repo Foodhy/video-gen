@@ -18,6 +18,7 @@ export default function MediaPanel() {
   const addSegmentForAsset = useEditor((s) => s.addSegmentForAsset);
   const removeAsset = useEditor((s) => s.removeAsset);
   const selectAsset = useEditor((s) => s.selectAsset);
+  const setPreview = useEditor((s) => s.setPreview);
   const addFolder = useEditor((s) => s.addFolder);
   const renameFolder = useEditor((s) => s.renameFolder);
   const deleteFolder = useEditor((s) => s.deleteFolder);
@@ -36,8 +37,7 @@ export default function MediaPanel() {
         const res = await importFile(f, projectId ?? undefined);
         setProject(res.projectId);
         const asset: Asset = { ...res.clip, mediaUrl: res.mediaUrl, thumbs: res.thumbs };
-        addAsset(asset);
-        addSegmentForAsset(asset.id);
+        addAsset(asset); // lands in the library only — not the timeline
         if (folderId) moveToFolder(asset.id, folderId);
         logger.success("media", "Imported", f.name);
         showToast("Imported " + f.name);
@@ -106,14 +106,17 @@ export default function MediaPanel() {
         className={"media-item" + (a.id === selectedAssetId ? " sel" : "")}
         draggable
         onDragStart={(e) => e.dataTransfer.setData(ASSET_DND, a.id)}
-        onClick={() => selectAsset(a.id)}
+        onClick={() => {
+          selectAsset(a.id);
+          setPreview(a.id); // single click previews it in the player
+        }}
         onDoubleClick={() => addSegmentForAsset(a.id)}
         onContextMenu={(e) => {
           e.preventDefault();
           selectAsset(a.id);
           setMenu({ x: e.clientX, y: e.clientY, asset: a });
         }}
-        title={a.name + " — double-click to add · drag to a folder · right-click for options"}
+        title={a.name + " — click to preview · double-click to add to timeline · drag to a folder · right-click for options"}
       >
         <button
           className="media-del"

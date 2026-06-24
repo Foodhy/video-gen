@@ -77,6 +77,7 @@ interface EditorState {
   selectedAssetId: string | null;
   selectedSegmentId: string | null;
   selectedIds: string[]; // multi-selection (marquee); selectedSegmentId is the primary
+  previewAssetId: string | null; // library asset being previewed standalone in the player
   playhead: number; // timeline seconds
   playing: boolean;
   pxPerSec: number;
@@ -111,6 +112,7 @@ interface EditorState {
   selectAsset: (id: string | null) => void;
   selectSegment: (id: string | null) => void;
   setSelection: (ids: string[]) => void;
+  setPreview: (assetId: string | null) => void;
   splitAtPlayhead: () => void;
   trimSegment: (id: string, patch: { in?: number; out?: number }) => void;
   deleteSegment: (id: string) => void;
@@ -396,6 +398,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   selectedAssetId: null,
   selectedSegmentId: null,
   selectedIds: [],
+  previewAssetId: null,
   playhead: 0,
   playing: false,
   captions: {},
@@ -429,6 +432,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       selectedAssetId: null,
       selectedSegmentId: null,
       selectedIds: [],
+      previewAssetId: null,
       playhead: 0,
       playing: false,
       past: [],
@@ -498,9 +502,10 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   selectAsset: (id) => set({ selectedAssetId: id }),
   selectSegment: (id) =>
-    set({ selectedSegmentId: id, selectedIds: id ? [id] : [], selectedTextId: null }),
+    set({ selectedSegmentId: id, selectedIds: id ? [id] : [], selectedTextId: null, previewAssetId: null }),
   setSelection: (ids) =>
     set({ selectedIds: ids, selectedSegmentId: ids[0] ?? null, selectedTextId: null }),
+  setPreview: (assetId) => set({ previewAssetId: assetId, playing: false }),
 
   splitAtPlayhead: () => {
     const t0 = get().playhead;
