@@ -32,6 +32,8 @@ export default function Timeline() {
   const toggleMute = useEditor((s) => s.toggleMute);
   const setFade = useEditor((s) => s.setFade);
   const setXfade = useEditor((s) => s.setXfade);
+  const setFx = useEditor((s) => s.setFx);
+  const clearFx = useEditor((s) => s.clearFx);
   const projectId = useEditor((s) => s.projectId);
   const assets = useEditor((s) => s.assets);
   const addAsset = useEditor((s) => s.addAsset);
@@ -137,6 +139,16 @@ export default function Timeline() {
         hint: "⤬",
         disabled: !hasNext,
         onClick: () => setXfade(seg.id, seg.xfadeAfter ? 0 : 0.5),
+      },
+      { separator: true, label: "" },
+      {
+        label: seg.fx?.grayscale ? "Color (undo B&W)" : "Black & white",
+        onClick: () => setFx(seg.id, { grayscale: !seg.fx?.grayscale }),
+      },
+      {
+        label: "Clear effects",
+        disabled: !seg.fx,
+        onClick: () => clearFx(seg.id),
       },
       { separator: true, label: "" },
       {

@@ -296,6 +296,7 @@ interface ExportBody {
     fadeIn?: number;
     fadeOut?: number;
     xfadeAfter?: number;
+    fx?: EdlSegment["fx"];
   }[];
   burnSubtitles?: BurnCaption[];
   texts?: BurnText[];
@@ -321,6 +322,7 @@ async function handleExport(req: Request): Promise<Response> {
       fadeIn: s.fadeIn,
       fadeOut: s.fadeOut,
       xfadeAfter: s.xfadeAfter,
+      fx: s.fx,
     });
   }
   if (!segments.length) return bad("no video segments to export");

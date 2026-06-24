@@ -45,6 +45,8 @@ export default function Details() {
   const updateCaptionText = useEditor((s) => s.updateCaptionText);
   const clearCaptions = useEditor((s) => s.clearCaptions);
   const setFade = useEditor((s) => s.setFade);
+  const setFx = useEditor((s) => s.setFx);
+  const clearFx = useEditor((s) => s.clearFx);
   const texts = useEditor((s) => s.texts);
   const selectedTextId = useEditor((s) => s.selectedTextId);
   const updateText = useEditor((s) => s.updateText);
@@ -251,6 +253,44 @@ export default function Details() {
                 <span className="mono" style={{ fontSize: 10, color: "var(--text-muted)" }}>
                   applies to video + audio
                 </span>
+
+                <div style={{ height: 8 }} />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="label">Effects</span>
+                  <button className="cap-clear" onClick={() => clearFx(seg.id)} title="Reset effects">
+                    reset
+                  </button>
+                </div>
+                {(
+                  [
+                    ["Brightness", "brightness", -1, 1, 0.05, seg.fx?.brightness ?? 0],
+                    ["Contrast", "contrast", 0, 2, 0.05, seg.fx?.contrast ?? 1],
+                    ["Saturation", "saturation", 0, 2, 0.05, seg.fx?.saturation ?? 1],
+                    ["Blur", "blur", 0, 20, 0.5, seg.fx?.blur ?? 0],
+                  ] as const
+                ).map(([label, key, min, max, step, val]) => (
+                  <label key={key} className="fx-slider">
+                    <span>
+                      {label} <span className="mono">{(val as number).toFixed(2)}</span>
+                    </span>
+                    <input
+                      type="range"
+                      min={min}
+                      max={max}
+                      step={step}
+                      value={val as number}
+                      onChange={(e) => setFx(seg.id, { [key]: Number(e.target.value) })}
+                    />
+                  </label>
+                ))}
+                <label className="fx-check">
+                  <input
+                    type="checkbox"
+                    checked={!!seg.fx?.grayscale}
+                    onChange={(e) => setFx(seg.id, { grayscale: e.target.checked })}
+                  />
+                  Black &amp; white
+                </label>
               </>
             ) : null}
 

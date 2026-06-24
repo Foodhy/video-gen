@@ -5,6 +5,7 @@ import {
   placeCaptions,
   captionAt,
   locate,
+  fxToCss,
   timelineDuration,
   type PlacedSegment,
 } from "../state/editor.ts";
@@ -160,7 +161,7 @@ export default function Player() {
       <div className="player-stage" ref={stageRef}>
         {hasContent ? (
           <>
-            <video ref={videoRef} playsInline />
+            <video ref={videoRef} playsInline style={{ filter: fxToCss(activeHit?.seg.fx) }} />
             {fade < 1 && (
               <div className="fade-overlay" style={{ opacity: 1 - fade }} />
             )}

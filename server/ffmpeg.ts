@@ -102,6 +102,27 @@ export interface EdlSegment {
   fadeIn?: number; // seconds — video+audio fade in
   fadeOut?: number; // seconds — video+audio fade out
   xfadeAfter?: number; // seconds — crossfade overlap into the NEXT segment
+  fx?: {
+    brightness?: number;
+    contrast?: number;
+    saturation?: number;
+    grayscale?: boolean;
+    blur?: number;
+  };
+}
+
+// Build eq/gblur filter strings from an fx object.
+function fxFilters(fx: EdlSegment["fx"]): string[] {
+  if (!fx) return [];
+  const f: string[] = [];
+  const eq: string[] = [];
+  if (fx.brightness) eq.push(`brightness=${fx.brightness}`);
+  if (fx.contrast !== undefined && fx.contrast !== 1) eq.push(`contrast=${fx.contrast}`);
+  const sat = fx.grayscale ? 0 : fx.saturation;
+  if (sat !== undefined && sat !== 1) eq.push(`saturation=${sat}`);
+  if (eq.length) f.push("eq=" + eq.join(":"));
+  if (fx.blur) f.push(`gblur=sigma=${fx.blur}`);
+  return f;
 }
 
 // Build a single xfade+acrossfade chain over a run of parts joined by crossfades.
@@ -230,7 +251,7 @@ export async function render(
     // Build video + audio filter chains for fades / mute.
     const fi = Math.min(seg.fadeIn ?? 0, dur);
     const fo = Math.min(seg.fadeOut ?? 0, dur);
-    const vf: string[] = [];
+    const vf: string[] = [...fxFilters(seg.fx)]; // color/blur before fades
     const af: string[] = [];
     if (fi > 0) {
       vf.push(`fade=t=in:st=0:d=${fi}`);

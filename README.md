@@ -91,5 +91,5 @@ and `+ New Project` starts a fresh one. Backed by `GET/POST /api/projects`.
 - **Extract section audio** — right-click a clip → *Extract section audio → file* renders just that `[in,out]` range to `.m4a` and downloads it.
 - **Crossfade between clips** — right-click → *Crossfade with next*. Clips overlap on the timeline; export dissolves video (`xfade`) + audio (`acrossfade`). Boundaries without a crossfade stay hard cuts. Badge `⤬` marks a crossfade.
 
-## Phase 5 (planned, seams in UI)
-Effects, filters, color. The `Effects` toolbar button is present but disabled.
+## Phase 5 — Effects / filters (built)
+Per-clip color + blur. Select a segment → Details *Effects*: brightness, contrast, saturation, blur sliders + Black & white toggle (also in the right-click menu). Live CSS-filter preview on the player; export bakes them via ffmpeg `eq` + `gblur`. Badge `✦` marks a clip with effects. Undoable + persisted.

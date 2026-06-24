@@ -985,6 +985,34 @@ body {
   pointer-events: none;
   text-shadow: 0 1px 2px #000;
 }
+.seg-fx {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  z-index: 3;
+  font-size: 11px;
+  color: var(--accent-0);
+  pointer-events: none;
+  text-shadow: 0 1px 2px #000;
+}
+.fx-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--text-1);
+  margin-bottom: 6px;
+}
+.fx-slider input {
+  width: 100%;
+}
+.fx-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-0);
+}
 
 /* ---------- console / log drawer ---------- */
 .log-badge {

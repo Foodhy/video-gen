@@ -78,6 +78,13 @@ export interface ExportEdlItem {
   fadeIn?: number;
   fadeOut?: number;
   xfadeAfter?: number;
+  fx?: {
+    brightness?: number;
+    contrast?: number;
+    saturation?: number;
+    grayscale?: boolean;
+    blur?: number;
+  };
 }
 
 export interface TextOverlayItem {

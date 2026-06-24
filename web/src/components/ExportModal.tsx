@@ -27,6 +27,7 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
       fadeIn: p.fadeIn,
       fadeOut: p.fadeOut,
       xfadeAfter: p.xfadeAfter,
+      fx: p.fx,
     }));
     if (!edl.length) {
       setError("No video segments to export.");

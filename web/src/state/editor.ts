@@ -20,6 +20,16 @@ export interface Segment {
   fadeIn?: number; // seconds — fade from black + audio fade-in at segment start
   fadeOut?: number; // seconds — fade to black + audio fade-out at segment end
   xfadeAfter?: number; // seconds — crossfade overlap into the next video segment
+  fx?: Fx; // color/blur effects
+}
+
+// Visual effects. Defaults: brightness 0, contrast 1, saturation 1, blur 0.
+export interface Fx {
+  brightness?: number; // -1..1
+  contrast?: number; // 0..2
+  saturation?: number; // 0..2
+  grayscale?: boolean;
+  blur?: number; // px / sigma 0..20
 }
 
 export interface PlacedSegment extends Segment {
@@ -95,6 +105,8 @@ interface EditorState {
   toggleMute: (id: string) => void;
   setFade: (id: string, patch: { fadeIn?: number; fadeOut?: number }) => void;
   setXfade: (id: string, secs: number) => void;
+  setFx: (id: string, patch: Partial<Fx>) => void;
+  clearFx: (id: string) => void;
   setPlayhead: (t: number) => void;
   setPlaying: (p: boolean) => void;
   setZoom: (px: number) => void;
@@ -235,6 +247,29 @@ export function placeCaptions(
 
 export function captionAt(placed: PlacedCaption[], t: number): PlacedCaption | null {
   return placed.find((c) => t >= c.tStart && t < c.tEnd) ?? null;
+}
+
+// Build a CSS `filter` string from Fx (for live preview on the <video>).
+export function fxToCss(fx: Fx | undefined): string {
+  if (!fx) return "none";
+  const parts: string[] = [];
+  if (fx.brightness) parts.push(`brightness(${1 + fx.brightness})`);
+  if (fx.contrast !== undefined && fx.contrast !== 1) parts.push(`contrast(${fx.contrast})`);
+  if (fx.saturation !== undefined && fx.saturation !== 1) parts.push(`saturate(${fx.saturation})`);
+  if (fx.grayscale) parts.push("grayscale(1)");
+  if (fx.blur) parts.push(`blur(${fx.blur}px)`);
+  return parts.length ? parts.join(" ") : "none";
+}
+
+export function hasFx(fx: Fx | undefined): boolean {
+  if (!fx) return false;
+  return !!(
+    fx.brightness ||
+    fx.grayscale ||
+    fx.blur ||
+    (fx.contrast !== undefined && fx.contrast !== 1) ||
+    (fx.saturation !== undefined && fx.saturation !== 1)
+  );
 }
 
 // Map timeline time -> active placed segment on a track + source time.
@@ -445,6 +480,19 @@ export const useEditor = create<EditorState>((set, get) => ({
       segments: s.segments.map((x) =>
         x.id === id ? { ...x, xfadeAfter: Math.max(0, Math.min(secs, x.out - x.in)) } : x,
       ),
+    }));
+  },
+
+  setFx: (id, patch) => {
+    get().record();
+    set((s) => ({
+      segments: s.segments.map((x) => (x.id === id ? { ...x, fx: { ...x.fx, ...patch } } : x)),
+    }));
+  },
+  clearFx: (id) => {
+    get().record();
+    set((s) => ({
+      segments: s.segments.map((x) => (x.id === id ? { ...x, fx: undefined } : x)),
     }));
   },
 

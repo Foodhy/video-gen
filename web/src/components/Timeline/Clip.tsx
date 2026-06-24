@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { useEditor, type PlacedSegment } from "../../state/editor.ts";
+import { useEditor, hasFx, type PlacedSegment } from "../../state/editor.ts";
 
 export default function Clip({
   placed,
@@ -67,6 +67,11 @@ export default function Clip({
       {placed.xfadeAfter ? (
         <span className="seg-xfade" title={`Crossfade ${placed.xfadeAfter}s into next`}>
           ⤬
+        </span>
+      ) : null}
+      {hasFx(placed.fx) ? (
+        <span className="seg-fx" title="Effects applied">
+          ✦
         </span>
       ) : null}
       {placed.fadeIn ? (
