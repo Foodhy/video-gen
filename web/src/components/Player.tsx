@@ -124,11 +124,12 @@ export default function Player() {
     }
     const asset = assets[hit.seg.clipId];
     if (!asset) return;
-    // A1 provides the sound when present (unless that track is muted/hidden) → mute base.
+    // If an A1 track exists, it OWNS the audio: the base video stays muted
+    // everywhere (so once A1 ends → silence, no embedded video sound leaks).
     const a1Off = !!trackMuted.audio || !!trackHidden.audio;
-    const a1Here = !!locate(audioPlaced, t) && !a1Off;
+    const hasA1 = !a1Off && useEditor.getState().segments.some((x) => x.track === "audio");
     const live = useEditor.getState().segments.find((x) => x.id === hit.seg.id) ?? hit.seg; // live gain while playing
-    v.muted = !!live.muted || a1Here || !!trackMuted.video;
+    v.muted = !!live.muted || hasA1 || !!trackMuted.video;
     v.volume = Math.min(1, fadeFactor(hit.seg, t) * (live.volume ?? 1)); // fade × gain (preview caps at 1)
     v.playbackRate = hit.seg.speed ?? 1;
     if (loadedClip.current !== asset.id) {

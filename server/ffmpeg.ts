@@ -509,7 +509,8 @@ export async function render(
       "ffmpeg", "-y", "-i", videoTarget, "-i", a1,
       "-map", "0:v:0", "-map", "1:a:0",
       "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-      "-movflags", "+faststart", "-shortest", outPath,
+      // no -shortest: keep the full video length; A1 just ends early (silence after).
+      "-movflags", "+faststart", outPath,
     ]);
     if (mux.code !== 0) throw new Error("render: audio mux failed: " + mux.stderr.slice(-400));
   }
