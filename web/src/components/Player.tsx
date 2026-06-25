@@ -146,7 +146,7 @@ export default function Player() {
     if ((forceSeek || playing) && Math.abs(v.currentTime - hit.srcTime) > 0.3) {
       v.currentTime = hit.srcTime;
     }
-    if (playing && v.paused) v.play().catch(() => {});
+    if (playing && v.paused && !v.ended) v.play().catch(() => {});
   }
 
   // Keep the overlay <video> synced to the overlay track (muted PiP layer).
@@ -176,7 +176,7 @@ export default function Player() {
       return;
     }
     if ((forceSeek || playing) && Math.abs(v.currentTime - hit.srcTime) > 0.3) v.currentTime = hit.srcTime;
-    if (playing && v.paused) v.play().catch(() => {});
+    if (playing && v.paused && !v.ended) v.play().catch(() => {});
   }
 
   // Keep the A1 audio <audio> element synced to the audio track.
@@ -191,6 +191,11 @@ export default function Player() {
     }
     const asset = assets[hit.seg.clipId];
     if (!asset) return;
+    // Past the end of the audio media — stop (don't let the element loop/replay).
+    if (hit.srcTime >= (asset.duration || Infinity) - 0.03) {
+      if (!a.paused) a.pause();
+      return;
+    }
     a.playbackRate = hit.seg.speed ?? 1;
     const a1Off = !!trackMuted.audio || !!trackHidden.audio;
     const live = useEditor.getState().segments.find((x) => x.id === hit.seg.id) ?? hit.seg; // live gain
@@ -208,7 +213,7 @@ export default function Player() {
       return;
     }
     if ((forceSeek || playing) && Math.abs(a.currentTime - hit.srcTime) > 0.3) a.currentTime = hit.srcTime;
-    if (playing && a.paused) a.play().catch(() => {});
+    if (playing && a.paused && !a.ended) a.play().catch(() => {});
   }
 
   // React to scrubbing while paused.
