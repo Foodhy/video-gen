@@ -24,7 +24,9 @@ export default function Clip({
   const projectId = useEditor((s) => s.projectId);
   const setAssetPeaks = useEditor((s) => s.setAssetPeaks);
   const trimSegment = useEditor((s) => s.trimSegment);
+  const setVolume = useEditor((s) => s.setVolume);
   const record = useEditor((s) => s.record);
+  const volDrag = useRef(false);
   const dragState = useRef<{ side: "l" | "r"; startX: number; in0: number; out0: number } | null>(
     null,
   );
@@ -119,11 +121,33 @@ export default function Clip({
     const i1 = Math.min(N, Math.ceil((placed.out / asset.duration) * N));
     const slice = asset.peaks.slice(i0, i1);
     if (slice.length < 2) return null;
-    const top = slice.map((p, i) => `${i},${(0.5 - p * 0.48).toFixed(3)}`);
-    const bot = slice.map((p, i) => `${i},${(0.5 + p * 0.48).toFixed(3)}`).reverse();
+    const vol = placed.volume ?? 1;
+    const amp = (p: number) => Math.min(0.49, p * vol * 0.48);
+    const top = slice.map((p, i) => `${i},${(0.5 - amp(p)).toFixed(3)}`);
+    const bot = slice.map((p, i) => `${i},${(0.5 + amp(p)).toFixed(3)}`).reverse();
     return [...top, ...bot].join(" ");
   }
   const wave = isAudio ? wavePoints() : null;
+  const vol = placed.volume ?? 1;
+
+  // Vertical drag of the volume line inside an audio clip → gain (0..2).
+  function onVolDown(e: React.PointerEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    record();
+    volDrag.current = true;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }
+  function onVolMove(e: React.PointerEvent) {
+    if (!volDrag.current) return;
+    const rect = (e.currentTarget as HTMLElement).parentElement!.getBoundingClientRect();
+    const yFrac = (e.clientY - rect.top) / rect.height; // 0 top .. 1 bottom
+    setVolume(placed.id, Math.max(0, Math.min(2, 2 * (1 - yFrac))));
+  }
+  function onVolUp(e: React.PointerEvent) {
+    volDrag.current = false;
+    (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+  }
   const thumbs = asset?.thumbs ?? [];
 
   return (
@@ -173,13 +197,26 @@ export default function Clip({
         />
       ) : null}
       {isAudio ? (
-        wave ? (
-          <svg className="wave-svg" viewBox={`0 0 ${(wave.split(" ").length / 2) | 0} 1`} preserveAspectRatio="none">
-            <polygon points={wave} />
-          </svg>
-        ) : (
-          <div className="wave" />
-        )
+        <>
+          {wave ? (
+            <svg className="wave-svg" viewBox={`0 0 ${(wave.split(" ").length / 2) | 0} 1`} preserveAspectRatio="none">
+              <polygon points={wave} />
+            </svg>
+          ) : (
+            <div className="wave" />
+          )}
+          {/* draggable volume / gain line */}
+          <div
+            className="vol-line"
+            style={{ top: (1 - vol / 2) * 100 + "%" }}
+            onPointerDown={onVolDown}
+            onPointerMove={onVolMove}
+            onPointerUp={onVolUp}
+            title={`Volume ${Math.round(vol * 100)}% — drag up/down`}
+          >
+            <span className="vol-val">{Math.round(vol * 100)}%</span>
+          </div>
+        </>
       ) : (
         <div className="thumbs">
           {thumbs.map((t, i) => (
