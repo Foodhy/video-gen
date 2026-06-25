@@ -290,8 +290,9 @@ export default function Timeline() {
       const res = await separateAudio(projectId, clipId);
       addAsset({ ...res.clip, mediaUrl: res.mediaUrl, thumbs: [] });
       addSegmentForAsset(res.clip.id);
+      useEditor.getState().muteSegmentsOfClip(clipId); // A1 becomes the only audio
       logger.success("audio", "Audio track created", res.clip.name);
-      showToast("Audio track created");
+      showToast("Audio track created — video audio moved to A1");
     } catch (e: any) {
       logger.error("audio", "Separate audio failed", e?.message ?? String(e));
       showToast(e.message ?? "separate failed", true);

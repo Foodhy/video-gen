@@ -256,6 +256,18 @@ test("split is a razor: cuts the segment under the playhead on every track", () 
   expect(placeTrack(st.segments, "audio")).toHaveLength(2); // audio is also split
 });
 
+test("muteSegmentsOfClip mutes the clip's video segments (not audio)", () => {
+  const s = useEditor.getState();
+  s.addAsset(asset("v", 5, "video"));
+  s.addSegmentForAsset("v");
+  s.addAsset(asset("v_audio", 5, "audio"));
+  s.addSegmentForAsset("v_audio");
+  s.muteSegmentsOfClip("v");
+  const segs = useEditor.getState().segments;
+  expect(segs.find((x) => x.clipId === "v")!.muted).toBe(true); // video silenced
+  expect(segs.find((x) => x.clipId === "v_audio")!.muted).toBeFalsy(); // A1 untouched
+});
+
 test("removeAsset of the audio drops only audio segments", () => {
   const s = useEditor.getState();
   s.addAsset(asset("v", 5, "video"));

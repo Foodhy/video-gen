@@ -162,6 +162,7 @@ interface EditorState {
     patch: { ox?: number; oy?: number; oscale?: number; ox2?: number; oy2?: number; animate?: boolean },
   ) => void;
   toggleMute: (id: string) => void;
+  muteSegmentsOfClip: (clipId: string) => void;
   setFade: (id: string, patch: { fadeIn?: number; fadeOut?: number }) => void;
   setXfade: (id: string, secs: number) => void;
   setFx: (id: string, patch: Partial<Fx>) => void;
@@ -830,6 +831,15 @@ export const useEditor = create<EditorState>((set, get) => ({
       segments: s.segments.map((x) => (x.id === id ? { ...x, muted: !x.muted } : x)),
     }));
   },
+
+  // After separating audio, silence the source clip's embedded audio so the new
+  // A1 track is the only audio (delete A1 -> silence; A1 volume controls it).
+  muteSegmentsOfClip: (clipId) =>
+    set((s) => ({
+      segments: s.segments.map((x) =>
+        x.clipId === clipId && x.track !== "audio" ? { ...x, muted: true } : x,
+      ),
+    })),
 
   setFade: (id, patch) => {
     get().record();

@@ -86,7 +86,8 @@ export default function Details() {
       const a: Asset = { ...res.clip, mediaUrl: res.mediaUrl, thumbs: [] };
       addAsset(a);
       addSegmentForAsset(a.id);
-      showToast("Audio track created");
+      useEditor.getState().muteSegmentsOfClip(asset.id); // A1 becomes the only audio
+      showToast("Audio track created — video audio moved to A1");
     } catch (e: any) {
       showToast(e.message ?? "separate failed", true);
     } finally {
