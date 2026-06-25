@@ -127,8 +127,9 @@ export default function Player() {
     // A1 provides the sound when present (unless that track is muted/hidden) → mute base.
     const a1Off = !!trackMuted.audio || !!trackHidden.audio;
     const a1Here = !!locate(audioPlaced, t) && !a1Off;
-    v.muted = !!hit.seg.muted || a1Here || !!trackMuted.video;
-    v.volume = Math.min(1, fadeFactor(hit.seg, t) * (hit.seg.volume ?? 1)); // fade × gain (preview caps at 1)
+    const live = useEditor.getState().segments.find((x) => x.id === hit.seg.id) ?? hit.seg; // live gain while playing
+    v.muted = !!live.muted || a1Here || !!trackMuted.video;
+    v.volume = Math.min(1, fadeFactor(hit.seg, t) * (live.volume ?? 1)); // fade × gain (preview caps at 1)
     v.playbackRate = hit.seg.speed ?? 1;
     if (loadedClip.current !== asset.id) {
       loadedClip.current = asset.id;
@@ -192,7 +193,8 @@ export default function Player() {
     if (!asset) return;
     a.playbackRate = hit.seg.speed ?? 1;
     const a1Off = !!trackMuted.audio || !!trackHidden.audio;
-    a.volume = a1Off ? 0 : Math.min(1, fadeFactor(hit.seg, t) * (hit.seg.muted ? 0 : hit.seg.volume ?? 1));
+    const live = useEditor.getState().segments.find((x) => x.id === hit.seg.id) ?? hit.seg; // live gain
+    a.volume = a1Off ? 0 : Math.min(1, fadeFactor(hit.seg, t) * (live.muted ? 0 : live.volume ?? 1));
     if (loadedAudio.current !== asset.id) {
       loadedAudio.current = asset.id;
       a.src = asset.mediaUrl;
