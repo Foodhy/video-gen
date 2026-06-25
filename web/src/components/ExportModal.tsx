@@ -16,7 +16,46 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
   const [burn, setBurn] = useState(hasCaps);
   const [job, setJob] = useState<JobState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saveName, setSaveName] = useState<string>("");
+  const [savedTo, setSavedTo] = useState<string>("");
+  const saveHandle = useRef<any>(null);
+  const wrote = useRef(false);
   const poll = useRef<number | null>(null);
+  const showToast = useEditor((s) => s.showToast);
+
+  // Pick the destination on the Mac BEFORE exporting.
+  async function chooseDestination() {
+    const picker = (window as any).showSaveFilePicker;
+    if (!picker) {
+      showToast("This browser can't pick a folder — it'll download to your Downloads folder", true);
+      return;
+    }
+    try {
+      const h = await picker({
+        suggestedName: "video-gen-export.mp4",
+        types: [{ description: "MP4 video", accept: { "video/mp4": [".mp4"] } }],
+      });
+      saveHandle.current = h;
+      setSaveName(h.name);
+    } catch {
+      /* cancelled */
+    }
+  }
+
+  // Write the finished export to the chosen handle.
+  async function writeToChosen(url: string) {
+    if (!saveHandle.current || wrote.current) return;
+    wrote.current = true;
+    try {
+      const w = await saveHandle.current.createWritable();
+      const res = await fetch(url);
+      await res.body!.pipeTo(w);
+      setSavedTo(saveName);
+      showToast("Saved to " + saveName);
+    } catch (e: any) {
+      showToast("Save failed: " + (e?.message ?? e), true);
+    }
+  }
 
   async function run() {
     if (!projectId) return;
@@ -102,6 +141,7 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
         try {
           const j = await getJob(jobId);
           setJob(j);
+          if (j.status === "done" && j.outputFile) writeToChosen(j.outputFile);
           if (j.status !== "running" && poll.current) {
             clearInterval(poll.current);
             poll.current = null;
@@ -175,6 +215,19 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
               />
               Burn subtitles into video {hasCaps ? `(${placedCaps.length} lines)` : "(none — transcribe first)"}
             </label>
+
+            <div style={{ marginTop: 14 }}>
+              <span className="label">Save to</span>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 5 }}>
+                <button className="btn-line" style={{ width: "auto" }} onClick={chooseDestination}>
+                  📁 Choose location…
+                </button>
+                <span className="mono" style={{ fontSize: 11, color: saveName ? "var(--accent-0)" : "var(--text-muted)" }}>
+                  {saveName || "Downloads (default)"}
+                </span>
+              </div>
+            </div>
+
             <div className="actions">
               <button className="btn-cta" onClick={run}>
                 ⬇ Start Export
@@ -188,7 +241,9 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
           <p style={{ color: "#f0c0c0" }}>{error ?? job?.error}</p>
         ) : done ? (
           <>
-            <p style={{ color: "var(--text-1)" }}>Render complete.</p>
+            <p style={{ color: "var(--text-1)" }}>
+              {savedTo ? `Saved to ${savedTo}` : "Render complete."}
+            </p>
             <p className="mono" style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
               {job?.outputPath}
             </p>
