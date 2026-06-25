@@ -302,3 +302,17 @@ export async function translateLines(
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "translate failed");
   return (await res.json()).lines;
 }
+
+export async function saveExportAs(
+  src: string,
+  destDir: string,
+  name?: string,
+): Promise<string> {
+  const res = await apiFetch("/api/save-as", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ src, destDir, name }),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "save failed");
+  return (await res.json()).saved;
+}

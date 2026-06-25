@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useEditor, placeTrack, placeCaptions, audioLaneCount } from "../state/editor.ts";
-import { startExport, getJob, type JobState } from "../lib/api.ts";
+import { startExport, getJob, saveExportAs, type JobState } from "../lib/api.ts";
 
 export default function ExportModal({ onClose }: { onClose: () => void }) {
   const projectId = useEditor((s) => s.projectId);
@@ -16,43 +16,23 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
   const [burn, setBurn] = useState(hasCaps);
   const [job, setJob] = useState<JobState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [saveName, setSaveName] = useState<string>("");
+  const [destDir, setDestDir] = useState<string>("~/Desktop");
+  const [fileName, setFileName] = useState<string>("video-gen-export.mp4");
   const [savedTo, setSavedTo] = useState<string>("");
-  const saveHandle = useRef<any>(null);
   const wrote = useRef(false);
   const poll = useRef<number | null>(null);
   const showToast = useEditor((s) => s.showToast);
 
-  // Pick the destination on the Mac BEFORE exporting.
-  async function chooseDestination() {
-    const picker = (window as any).showSaveFilePicker;
-    if (!picker) {
-      showToast("This browser can't pick a folder — it'll download to your Downloads folder", true);
-      return;
-    }
-    try {
-      const h = await picker({
-        suggestedName: "video-gen-export.mp4",
-        types: [{ description: "MP4 video", accept: { "video/mp4": [".mp4"] } }],
-      });
-      saveHandle.current = h;
-      setSaveName(h.name);
-    } catch {
-      /* cancelled */
-    }
-  }
-
-  // Write the finished export to the chosen handle.
-  async function writeToChosen(url: string) {
-    if (!saveHandle.current || wrote.current) return;
+  // Copy the finished export to the chosen folder on disk (server-side).
+  async function saveToDisk(src: string) {
+    if (wrote.current || !destDir.trim()) return;
     wrote.current = true;
     try {
-      const w = await saveHandle.current.createWritable();
-      const res = await fetch(url);
-      await res.body!.pipeTo(w);
-      setSavedTo(saveName);
-      showToast("Saved to " + saveName);
+      const saved = await saveExportAs(src, destDir.trim(), fileName.trim());
+      setSavedTo(saved);
+      showToast("Saved to " + saved);
     } catch (e: any) {
+      wrote.current = false;
       showToast("Save failed: " + (e?.message ?? e), true);
     }
   }
@@ -141,7 +121,7 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
         try {
           const j = await getJob(jobId);
           setJob(j);
-          if (j.status === "done" && j.outputFile) writeToChosen(j.outputFile);
+          if (j.status === "done" && j.outputFile) saveToDisk(j.outputFile);
           if (j.status !== "running" && poll.current) {
             clearInterval(poll.current);
             poll.current = null;
@@ -160,32 +140,6 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
   const done = job?.status === "done";
   const failed = job?.status === "error" || !!error;
 
-  // Let the user pick where to save (folder + name) and write the bytes there.
-  async function saveAs() {
-    if (!job?.outputFile) return;
-    const name = job.outputFile.split("/").pop() || "export.mp4";
-    const picker = (window as any).showSaveFilePicker;
-    try {
-      if (picker) {
-        const handle = await picker({
-          suggestedName: name,
-          types: [{ description: "MP4 video", accept: { "video/mp4": [".mp4"] } }],
-        });
-        const writable = await handle.createWritable();
-        const res = await fetch(job.outputFile);
-        await res.body!.pipeTo(writable); // streams + closes the file
-      } else {
-        const a = document.createElement("a");
-        a.href = job.outputFile;
-        a.download = name;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      }
-    } catch {
-      /* user cancelled the picker */
-    }
-  }
 
   return (
     <div className="overlay" onClick={!started || done || failed ? onClose : undefined}>
@@ -217,15 +171,37 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
             </label>
 
             <div style={{ marginTop: 14 }}>
-              <span className="label">Save to</span>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 5 }}>
-                <button className="btn-line" style={{ width: "auto" }} onClick={chooseDestination}>
-                  📁 Choose location…
-                </button>
-                <span className="mono" style={{ fontSize: 11, color: saveName ? "var(--accent-0)" : "var(--text-muted)" }}>
-                  {saveName || "Downloads (default)"}
-                </span>
+              <span className="label">Save to folder</span>
+              <div className="fx-presets" style={{ marginTop: 5 }}>
+                {[
+                  ["Desktop", "~/Desktop"],
+                  ["Movies", "~/Movies"],
+                  ["Downloads", "~/Downloads"],
+                  ["Home", "~"],
+                ].map(([lbl, p]) => (
+                  <button
+                    key={p}
+                    className={"fx-preset" + (destDir === p ? " on" : "")}
+                    onClick={() => setDestDir(p)}
+                  >
+                    {lbl}
+                  </button>
+                ))}
               </div>
+              <input
+                className="select-line"
+                style={{ marginTop: 6 }}
+                value={destDir}
+                onChange={(e) => setDestDir(e.target.value)}
+                placeholder="/Users/you/Desktop"
+              />
+              <input
+                className="select-line"
+                style={{ marginTop: 6 }}
+                value={fileName}
+                onChange={(e) => setFileName(e.target.value)}
+                placeholder="filename.mp4"
+              />
             </div>
 
             <div className="actions">
@@ -267,15 +243,21 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
 
         {(done || failed) && (
           <div className="actions">
+            {done && job?.outputFile && !savedTo && (
+              <button
+                className="btn-cta"
+                onClick={() => {
+                  wrote.current = false;
+                  saveToDisk(job.outputFile!);
+                }}
+              >
+                💾 Save to {destDir}
+              </button>
+            )}
             {done && job?.outputFile && (
-              <>
-                <button className="btn-cta" onClick={saveAs}>
-                  💾 Save As…
-                </button>
-                <a className="btn-line" style={{ width: "auto" }} href={job.outputFile} download>
-                  ⬇ Download
-                </a>
-              </>
+              <a className="btn-line" style={{ width: "auto" }} href={job.outputFile} download>
+                ⬇ Download
+              </a>
             )}
             <button className="btn-line" style={{ width: "auto" }} onClick={onClose}>
               Close
@@ -284,7 +266,7 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
         )}
         {done && (
           <span className="mono" style={{ fontSize: 9, color: "var(--text-muted)" }}>
-            “Save As…” lets you choose the folder; the file also stays in the project workspace.
+            {savedTo ? "✓ " + savedTo : "Saved to the folder above; also kept in the project workspace."}
           </span>
         )}
       </div>

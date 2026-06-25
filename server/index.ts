@@ -1,6 +1,7 @@
-import { join, basename, extname } from "node:path";
-import { mkdir, rm } from "node:fs/promises";
+import { join, basename, extname, isAbsolute } from "node:path";
+import { mkdir, rm, copyFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import {
   createProject, loadProject, saveProject, resolveMedia, newClipId, listProjects,
   sourceDir, derivedDir, thumbsDir, outputDir, projectDir, ROOT,
@@ -137,6 +138,10 @@ const server = Bun.serve({
 
       if (path === "/api/export" && req.method === "POST") {
         return await handleExport(req);
+      }
+
+      if (path === "/api/save-as" && req.method === "POST") {
+        return await handleSaveAs(req);
       }
 
       if (path === "/api/transcribe" && req.method === "POST") {
@@ -415,6 +420,29 @@ interface ExportBody {
     fadeIn?: number;
     fadeOut?: number;
   }[];
+}
+
+// Copy a rendered export (inside the workspace) to a folder on the user's disk.
+async function handleSaveAs(req: Request): Promise<Response> {
+  const { src, destDir, name } = (await req.json()) as {
+    src: string; // /media/<pid>/output/<file> path from the job
+    destDir: string; // folder on disk (may start with ~)
+    name?: string;
+  };
+  // Resolve src strictly inside the workspace.
+  const m = src.match(/^\/media\/([^/]+)\/(.+)$/);
+  if (!m) return bad("bad source");
+  const abs = resolveMedia(m[1], decodeURIComponent(m[2]));
+  if (!abs || !existsSync(abs)) return bad("export file not found", 404);
+
+  let dir = (destDir || "").trim();
+  if (dir.startsWith("~")) dir = join(homedir(), dir.slice(1));
+  if (!dir || !isAbsolute(dir)) return bad("destination must be an absolute folder path");
+  await mkdir(dir, { recursive: true });
+  const outName = (name || basename(abs)).replace(/[/\\]/g, "_");
+  const dest = join(dir, outName.endsWith(".mp4") ? outName : outName + ".mp4");
+  await copyFile(abs, dest);
+  return json({ saved: dest });
 }
 
 async function handleExport(req: Request): Promise<Response> {
