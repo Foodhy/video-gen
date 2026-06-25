@@ -144,8 +144,10 @@ test("serializeDoc keeps only persistable fields", () => {
     folderOf: {},
     trackHidden: {},
     trackMuted: {},
+    audioLanes: 1,
   });
   expect(Object.keys(doc).sort()).toEqual([
+    "audioLanes",
     "captionLang",
     "captions",
     "folderOf",

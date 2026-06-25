@@ -120,6 +120,33 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
   const done = job?.status === "done";
   const failed = job?.status === "error" || !!error;
 
+  // Let the user pick where to save (folder + name) and write the bytes there.
+  async function saveAs() {
+    if (!job?.outputFile) return;
+    const name = job.outputFile.split("/").pop() || "export.mp4";
+    const picker = (window as any).showSaveFilePicker;
+    try {
+      if (picker) {
+        const handle = await picker({
+          suggestedName: name,
+          types: [{ description: "MP4 video", accept: { "video/mp4": [".mp4"] } }],
+        });
+        const writable = await handle.createWritable();
+        const res = await fetch(job.outputFile);
+        await res.body!.pipeTo(writable); // streams + closes the file
+      } else {
+        const a = document.createElement("a");
+        a.href = job.outputFile;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+    } catch {
+      /* user cancelled the picker */
+    }
+  }
+
   return (
     <div className="overlay" onClick={!started || done || failed ? onClose : undefined}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -186,14 +213,24 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
         {(done || failed) && (
           <div className="actions">
             {done && job?.outputFile && (
-              <a className="btn-cta" href={job.outputFile} download>
-                ⬇ Download
-              </a>
+              <>
+                <button className="btn-cta" onClick={saveAs}>
+                  💾 Save As…
+                </button>
+                <a className="btn-line" style={{ width: "auto" }} href={job.outputFile} download>
+                  ⬇ Download
+                </a>
+              </>
             )}
             <button className="btn-line" style={{ width: "auto" }} onClick={onClose}>
               Close
             </button>
           </div>
+        )}
+        {done && (
+          <span className="mono" style={{ fontSize: 9, color: "var(--text-muted)" }}>
+            “Save As…” lets you choose the folder; the file also stays in the project workspace.
+          </span>
         )}
       </div>
     </div>
