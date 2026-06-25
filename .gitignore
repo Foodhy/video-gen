@@ -12,3 +12,9 @@ models/
 .env.*
 *.pem
 *.key
+
+# Tauri desktop build (generated/heavy binaries — not committed)
+src-tauri/target/
+src-tauri/binaries/
+src-tauri/resources/
+src-tauri/gen/
