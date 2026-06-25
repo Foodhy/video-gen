@@ -26,6 +26,11 @@ fail with `ERR_CONNECTION_REFUSED` (this is not a permissions issue).
   and the Subtitle buttons disable.
 - **Translation** (argostranslate): `python3 -m venv .venv && .venv/bin/pip install argostranslate`.
   Language packs download on first use, then run offline. Else `translate:false`.
+- **Stem separation** (voz / batería / bajo / otros): selectable engines, run via
+  `.venv`. `.venv/bin/pip install demucs` (recommended, best quality — model
+  downloads to `~/.cache/torch` on first run) and/or `.venv/bin/pip install spleeter`
+  (lighter/faster). `/api/capabilities` reports `separate:{demucs,spleeter}`; each
+  missing engine disables its dropdown option. See `server/separate.ts`.
 
 ## Architecture
 

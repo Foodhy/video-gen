@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useEditor, FX_PRESETS, type Asset } from "../state/editor.ts";
-import { separateAudio, transcribe, translateLines, getCapabilities } from "../lib/api.ts";
+import {
+  separateAudio, separateStems, transcribe, translateLines, getCapabilities, getJob,
+  type SeparateEngine,
+} from "../lib/api.ts";
 import { tc, bytes } from "../lib/format.ts";
 
 const LANGS = [
@@ -32,6 +35,9 @@ export default function Details() {
   const [target, setTarget] = useState("es");
   const [canTx, setCanTx] = useState(false);
   const [canTr, setCanTr] = useState(false);
+  const [sepCaps, setSepCaps] = useState({ demucs: false, spleeter: false });
+  const [sepEngine, setSepEngine] = useState<SeparateEngine>("demucs");
+  const [sepBusy, setSepBusy] = useState(false);
   const projectId = useEditor((s) => s.projectId);
   const assets = useEditor((s) => s.assets);
   const segments = useEditor((s) => s.segments);
@@ -70,6 +76,9 @@ export default function Details() {
     getCapabilities().then((c) => {
       setCanTx(c.transcribe);
       setCanTr(c.translate);
+      setSepCaps(c.separate);
+      // Default the dropdown to an installed engine (prefer demucs).
+      setSepEngine(c.separate.demucs ? "demucs" : c.separate.spleeter ? "spleeter" : "demucs");
     });
   }, []);
 
@@ -92,6 +101,32 @@ export default function Details() {
       showToast(e.message ?? "separate failed", true);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onSeparateStems() {
+    if (!asset || !projectId) return;
+    setSepBusy(true);
+    try {
+      showToast(`Separating stems with ${sepEngine}… (first run downloads a model)`);
+      const jobId = await separateStems(projectId, asset.id, sepEngine);
+      // Poll the job until the stems are rendered.
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const job = await getJob(jobId);
+        if (job.status === "error") throw new Error(job.error ?? "separation failed");
+        if (job.status === "done") {
+          for (const clip of job.clips ?? []) {
+            addAsset({ ...clip, thumbs: [] });
+          }
+          showToast(`${job.clips?.length ?? 0} stems added to library (voz / batería / bajo / otros)`);
+          break;
+        }
+      }
+    } catch (e: any) {
+      showToast(e.message ?? "separate stems failed", true);
+    } finally {
+      setSepBusy(false);
     }
   }
 
@@ -513,6 +548,49 @@ export default function Details() {
               >
                 {busy ? "Separating…" : "⎘ Separate Audio"}
               </button>
+
+              <div style={{ height: 10 }} />
+              <span className="label">
+                Separate stems — voz / efectos{" "}
+                {sepCaps.demucs || sepCaps.spleeter ? "" : "(demucs/spleeter missing)"}
+              </span>
+              <div style={{ display: "flex", gap: 6 }}>
+                <select
+                  className="select-line"
+                  value={sepEngine}
+                  onChange={(e) => setSepEngine(e.target.value as SeparateEngine)}
+                  disabled={!sepCaps.demucs && !sepCaps.spleeter}
+                  title="Separation engine"
+                >
+                  <option value="demucs" disabled={!sepCaps.demucs}>
+                    Demucs (mejor calidad){sepCaps.demucs ? "" : " — n/a"}
+                  </option>
+                  <option value="spleeter" disabled={!sepCaps.spleeter}>
+                    Spleeter (rápido){sepCaps.spleeter ? "" : " — n/a"}
+                  </option>
+                </select>
+                <button
+                  className="btn-line"
+                  style={{ width: "auto", whiteSpace: "nowrap" }}
+                  onClick={onSeparateStems}
+                  disabled={
+                    sepBusy ||
+                    (!sepCaps.demucs && !sepCaps.spleeter) ||
+                    !asset.hasAudio
+                  }
+                  title={
+                    !sepCaps.demucs && !sepCaps.spleeter
+                      ? "Install demucs or spleeter in .venv"
+                      : "Split audio into 4 stems (vocals/drums/bass/other)"
+                  }
+                >
+                  {sepBusy ? "Separating…" : "♫ Separate Stems"}
+                </button>
+              </div>
+              <span className="mono" style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                4 stems → library. Drag the ones you want onto the timeline.
+              </span>
+
               <div style={{ height: 6 }} />
               <span className="label">Subtitles — whisper.cpp {canTx ? "" : "(model missing)"}</span>
               <select

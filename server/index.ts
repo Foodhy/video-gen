@@ -13,6 +13,7 @@ import {
 import { createJob, getJob, updateJob } from "./jobs.ts";
 import { transcribe, modelAvailable } from "./transcribe.ts";
 import { translateLines, translateAvailable } from "./translate.ts";
+import { separateStems, separateCapabilities, STEMS, type Engine } from "./separate.ts";
 
 const PORT = Number(process.env.PORT ?? 8787);
 const json = (data: unknown, status = 200) =>
@@ -126,6 +127,10 @@ const server = Bun.serve({
         return await handleSeparateAudio(req);
       }
 
+      if (path === "/api/separate-stems" && req.method === "POST") {
+        return await handleSeparateStems(req);
+      }
+
       if (path === "/api/extract-audio" && req.method === "POST") {
         return await handleExtractAudio(req);
       }
@@ -143,7 +148,11 @@ const server = Bun.serve({
       }
 
       if (path === "/api/capabilities" && req.method === "GET") {
-        return json({ transcribe: modelAvailable(), translate: translateAvailable() });
+        return json({
+          transcribe: modelAvailable(),
+          translate: translateAvailable(),
+          separate: separateCapabilities(),
+        });
       }
 
       const peaksMatch = path.match(/^\/api\/peaks\/([^/]+)\/([^/]+)$/);
@@ -276,6 +285,68 @@ async function handleSeparateAudio(req: Request): Promise<Response> {
   await saveProject(project);
 
   return json({ clip, mediaUrl: `/media/${projectId}/${clip.file}` });
+}
+
+// Source separation: split a clip's audio into 4 stems (vocals/drums/bass/other)
+// via the chosen engine. Slow (seconds–minutes) → runs as a job; client polls
+// /api/job/:id and reads job.clips on done. Stems are imported to the library.
+async function handleSeparateStems(req: Request): Promise<Response> {
+  const { projectId, clipId, engine } = (await req.json()) as {
+    projectId: string;
+    clipId: string;
+    engine: Engine;
+  };
+  if (engine !== "demucs" && engine !== "spleeter") return bad("unknown engine");
+  if (!separateCapabilities()[engine]) return bad(`${engine} not installed`, 503);
+
+  const project = await loadProject(projectId);
+  if (!project) return bad("project not found", 404);
+  const src = project.clips.find((c) => c.id === clipId);
+  if (!src) return bad("clip not found", 404);
+  if (!src.hasAudio) return bad("clip has no audio track");
+  const srcAbs = resolveMedia(projectId, src.file)!;
+  const baseName = src.name.replace(/\.[^.]+$/, "");
+
+  const job = createJob();
+  const work = join(projectDir(projectId), "stems_" + job.id);
+
+  // Run async; client polls /api/job/:id.
+  (async () => {
+    try {
+      const stems = await separateStems(srcAbs, work, engine);
+      await mkdir(derivedDir(projectId), { recursive: true });
+      const clips: (ClipMeta & { mediaUrl: string })[] = [];
+      let done = 0;
+      for (const stem of STEMS) {
+        const audioId = newClipId();
+        const fileName = `${audioId}_${baseName}-${stem}.m4a`;
+        const outAbs = join(derivedDir(projectId), fileName);
+        await extractAudio(stems[stem], outAbs); // wav → aac m4a
+        const meta = await probe(outAbs);
+        const clip: ClipMeta = {
+          id: audioId,
+          name: `${baseName} — ${stem}`,
+          file: join("derived", fileName),
+          kind: "audio",
+          duration: meta.duration,
+          acodec: meta.acodec,
+          hasAudio: true,
+          size: Bun.file(outAbs).size,
+        };
+        project.clips.push(clip);
+        clips.push({ ...clip, mediaUrl: `/media/${projectId}/${clip.file}` });
+        updateJob(job.id, { progress: ++done / STEMS.length });
+      }
+      await saveProject(project);
+      updateJob(job.id, { status: "done", progress: 1, clips });
+    } catch (e: any) {
+      updateJob(job.id, { status: "error", error: e?.message ?? String(e) });
+    } finally {
+      await rm(work, { recursive: true, force: true }).catch(() => {});
+    }
+  })();
+
+  return json({ jobId: job.id });
 }
 
 async function handleExtractAudio(req: Request): Promise<Response> {

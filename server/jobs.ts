@@ -7,6 +7,7 @@ export interface Job {
   progress: number; // 0..1
   outputFile?: string; // relative to project dir
   outputPath?: string; // absolute, for reveal
+  clips?: unknown[]; // derived assets produced by the job (e.g. separated stems)
   error?: string;
 }
 

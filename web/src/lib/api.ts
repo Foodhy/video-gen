@@ -70,6 +70,23 @@ export async function separateAudio(
   return res.json();
 }
 
+export type SeparateEngine = "demucs" | "spleeter";
+
+// Kick off stem separation (returns a jobId; poll getJob, read job.clips on done).
+export async function separateStems(
+  projectId: string,
+  clipId: string,
+  engine: SeparateEngine,
+): Promise<string> {
+  const res = await apiFetch("/api/separate-stems", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ projectId, clipId, engine }),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "separate failed");
+  return (await res.json()).jobId;
+}
+
 export interface ExportEdlItem {
   clipId: string;
   in: number;
@@ -135,6 +152,7 @@ export interface JobState {
   progress: number;
   outputFile?: string;
   outputPath?: string;
+  clips?: (ClipMeta & { mediaUrl: string })[];
   error?: string;
 }
 
@@ -235,12 +253,24 @@ export interface CaptionLine {
   text: string;
 }
 
-export async function getCapabilities(): Promise<{ transcribe: boolean; translate: boolean }> {
+export interface Capabilities {
+  transcribe: boolean;
+  translate: boolean;
+  separate: { demucs: boolean; spleeter: boolean };
+}
+
+export async function getCapabilities(): Promise<Capabilities> {
+  const fallback: Capabilities = {
+    transcribe: false,
+    translate: false,
+    separate: { demucs: false, spleeter: false },
+  };
   try {
     const res = await apiFetch("/api/capabilities");
-    return res.ok ? res.json() : { transcribe: false, translate: false };
+    if (!res.ok) return fallback;
+    return { ...fallback, ...(await res.json()) };
   } catch {
-    return { transcribe: false, translate: false };
+    return fallback;
   }
 }
 
