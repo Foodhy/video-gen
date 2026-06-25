@@ -9,12 +9,54 @@ export interface Asset extends ClipMeta {
 
 export type TrackKind = "video" | "audio" | "overlay";
 
+// Resizable layout: pixel sizes of the three draggable panels (assets/media on
+// the left, details on the right, timeline at the bottom). Persisted to
+// localStorage as a UI preference (not per-project).
+export interface PanelSizes {
+  media: number; // left panel width (px)
+  details: number; // right panel width (px)
+  timeline: number; // timeline height (px)
+}
+export const DEFAULT_PANEL_SIZES: PanelSizes = { media: 280, details: 280, timeline: 400 };
+export const PANEL_CLAMP: Record<keyof PanelSizes, [number, number]> = {
+  media: [160, 640],
+  details: [160, 640],
+  timeline: [120, 1000],
+};
+
+function loadJSON<T>(key: string, fallback: T): T {
+  try {
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(key) : null;
+    return raw ? { ...fallback, ...JSON.parse(raw) } : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function saveJSON(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* ignore */
+  }
+}
+function clampPanel(p: Partial<PanelSizes>): Partial<PanelSizes> {
+  const out: Partial<PanelSizes> = {};
+  for (const k of Object.keys(p) as (keyof PanelSizes)[]) {
+    const v = p[k];
+    if (v == null) continue;
+    const [min, max] = PANEL_CLAMP[k];
+    out[k] = Math.round(Math.max(min, Math.min(max, v)));
+  }
+  return out;
+}
+
 // A timeline segment references a portion [in,out] of a source asset.
 // Segments on a track are laid end-to-end in array order, starting at t=0.
 export interface Segment {
   id: string;
   clipId: string;
   track: TrackKind;
+  lane?: number; // audio lane index (0-based). Only meaningful for track="audio" (A1/A2/A3…).
   in: number; // source seconds
   out: number; // source seconds
   start?: number; // explicit timeline position (sec). If unset, stacked after previous.
@@ -96,6 +138,8 @@ interface EditorState {
   selectedIds: string[]; // multi-selection (marquee); selectedSegmentId is the primary
   previewAssetId: string | null; // library asset being previewed standalone in the player
   previewAutoplay: boolean; // setting: auto-play a preview when opened
+  panelSizes: PanelSizes; // resizable layout (px) — assets / details / timeline
+  panelPresets: Record<string, PanelSizes>; // named layout presets
   playerNonce: number; // bump to force the player to reload its media elements
   importReq: { nonce: number; kind: "all" | "audio" }; // toolbar -> open library file picker
   playhead: number; // timeline seconds
@@ -112,6 +156,7 @@ interface EditorState {
   snapEnabled: boolean;
   trackHidden: Partial<Record<TrackKind, boolean>>; // hide a track (preview + export)
   trackMuted: Partial<Record<TrackKind, boolean>>; // silence a track's audio
+  audioLanes: number; // explicit count of audio lanes (A1/A2/A3…); ≥1
   captionSplitMode: boolean; // click-between-words in the preview to split a subtitle
   showCaptions: boolean;
   logs: LogEntry[];
@@ -133,17 +178,25 @@ interface EditorState {
     folderOf?: Record<string, string>;
     trackHidden?: Partial<Record<TrackKind, boolean>>;
     trackMuted?: Partial<Record<TrackKind, boolean>>;
+    audioLanes?: number;
   }) => void;
   addAsset: (a: Asset) => void;
   setAssetPeaks: (assetId: string, peaks: number[]) => void;
   removeAsset: (assetId: string) => void;
-  addSegmentForAsset: (assetId: string) => void;
+  addSegmentForAsset: (assetId: string, opts?: { lane?: number; start?: number }) => void;
   addSegmentAt: (assetId: string, track: TrackKind, start: number) => void;
+  addAudioLane: () => void;
+  addAudioStems: (assetIds: string[]) => void;
   selectAsset: (id: string | null) => void;
   selectSegment: (id: string | null) => void;
   setSelection: (ids: string[]) => void;
   setPreview: (assetId: string | null) => void;
   setPreviewAutoplay: (v: boolean) => void;
+  setPanelSize: (patch: Partial<PanelSizes>) => void;
+  resetPanelSizes: () => void;
+  savePanelPreset: (name: string) => void;
+  loadPanelPreset: (name: string) => void;
+  deletePanelPreset: (name: string) => void;
   recoverPlayer: () => void;
   requestImport: (kind: "all" | "audio") => void;
   splitAtPlayhead: () => void;
@@ -262,6 +315,7 @@ export interface EditorDoc {
   folderOf: Record<string, string>;
   trackHidden?: Partial<Record<TrackKind, boolean>>;
   trackMuted?: Partial<Record<TrackKind, boolean>>;
+  audioLanes?: number;
 }
 
 // Serialize the persistable editor document (excludes media URLs/runtime UI).
@@ -275,6 +329,7 @@ export function serializeDoc(s: {
   folderOf: Record<string, string>;
   trackHidden: Partial<Record<TrackKind, boolean>>;
   trackMuted: Partial<Record<TrackKind, boolean>>;
+  audioLanes: number;
 }): EditorDoc {
   return {
     segments: s.segments,
@@ -286,6 +341,7 @@ export function serializeDoc(s: {
     folderOf: s.folderOf,
     trackHidden: s.trackHidden,
     trackMuted: s.trackMuted,
+    audioLanes: s.audioLanes,
   };
 }
 
@@ -293,8 +349,12 @@ export function serializeDoc(s: {
 // Place segments on a track. Each segment sits at its explicit `start` when set,
 // otherwise stacked after the running cursor (back-compat for old docs). Result is
 // sorted by start, so clips can be freely positioned with gaps/overlaps.
-export function placeTrack(segments: Segment[], track: TrackKind): PlacedSegment[] {
-  const onTrack = segments.filter((s) => s.track === track);
+// Place segments on a track (and, for audio, a specific lane). Each segment sits
+// at its explicit `start`, otherwise stacked after the running cursor.
+export function placeTrack(segments: Segment[], track: TrackKind, lane = 0): PlacedSegment[] {
+  const onTrack = segments.filter(
+    (s) => s.track === track && (track !== "audio" || (s.lane ?? 0) === lane),
+  );
   const out: PlacedSegment[] = [];
   let cursor = 0;
   for (const s of onTrack) {
@@ -306,19 +366,30 @@ export function placeTrack(segments: Segment[], track: TrackKind): PlacedSegment
   return out.sort((a, b) => a.start - b.start);
 }
 
-export function trackDuration(segments: Segment[], track: TrackKind): number {
-  return placeTrack(segments, track).reduce((m, p) => Math.max(m, p.start + p.dur), 0);
+export function trackDuration(segments: Segment[], track: TrackKind, lane = 0): number {
+  return placeTrack(segments, track, lane).reduce((m, p) => Math.max(m, p.start + p.dur), 0);
+}
+
+// Number of audio lanes to render: at least `explicit`, and enough to cover the
+// highest lane index actually used by a segment.
+export function audioLaneCount(segments: Segment[], explicit = 1): number {
+  let max = 0;
+  for (const s of segments) if (s.track === "audio") max = Math.max(max, s.lane ?? 0);
+  return Math.max(1, explicit, max + 1);
 }
 
 // Timeline positions worth snapping to: clip + text edges, plus 0.
 export function buildSnapPoints(segments: Segment[], texts: TextClip[]): number[] {
   const pts = new Set<number>([0]);
-  for (const track of ["video", "audio", "overlay"] as const) {
-    for (const p of placeTrack(segments, track)) {
+  const add = (placed: PlacedSegment[]) => {
+    for (const p of placed) {
       pts.add(+p.start.toFixed(3));
       pts.add(+(p.start + p.dur).toFixed(3));
     }
-  }
+  };
+  add(placeTrack(segments, "video"));
+  add(placeTrack(segments, "overlay"));
+  for (let lane = 0; lane < audioLaneCount(segments); lane++) add(placeTrack(segments, "audio", lane));
   for (const t of texts) {
     pts.add(+t.start.toFixed(3));
     pts.add(+t.end.toFixed(3));
@@ -341,9 +412,12 @@ export function snapValue(v: number, points: number[], threshold: number): numbe
 }
 
 export function timelineDuration(segments: Segment[]): number {
+  let audio = 0;
+  for (let lane = 0; lane < audioLaneCount(segments); lane++)
+    audio = Math.max(audio, trackDuration(segments, "audio", lane));
   return Math.max(
     trackDuration(segments, "video"),
-    trackDuration(segments, "audio"),
+    audio,
     trackDuration(segments, "overlay"),
     0,
   );
@@ -462,6 +536,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   previewAssetId: null,
   previewAutoplay:
     typeof localStorage !== "undefined" ? localStorage.getItem("vg:previewAutoplay") !== "0" : true,
+  panelSizes: loadJSON("vg:panelSizes", DEFAULT_PANEL_SIZES),
+  panelPresets: loadJSON<Record<string, PanelSizes>>("vg:panelPresets", {}),
   playerNonce: 0,
   importReq: { nonce: 0, kind: "all" },
   playhead: 0,
@@ -477,6 +553,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   snapEnabled: true,
   trackHidden: {},
   trackMuted: {},
+  audioLanes: 1,
   captionSplitMode: false,
   showCaptions: true,
   logs: [],
@@ -501,6 +578,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       folderOf: {},
       trackHidden: {},
       trackMuted: {},
+      audioLanes: 1,
       selectedTextId: null,
       selectedComponentId: null,
       selectedAssetId: null,
@@ -513,7 +591,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       future: [],
     }),
 
-  hydrate: ({ assets, segments, captions, captionLang, texts, textComponents, folders, folderOf, trackHidden, trackMuted }) =>
+  hydrate: ({ assets, segments, captions, captionLang, texts, textComponents, folders, folderOf, trackHidden, trackMuted, audioLanes }) =>
     set({
       assets: Object.fromEntries(assets.map((a) => [a.id, a])),
       segments: segments ?? [],
@@ -525,6 +603,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       folderOf: folderOf ?? {},
       trackHidden: trackHidden ?? {},
       trackMuted: trackMuted ?? {},
+      audioLanes: Math.max(1, audioLanes ?? audioLaneCount(segments ?? [])),
       selectedComponentId: null,
       selectedTextId: null,
       selectedSegmentId: null,
@@ -567,20 +646,63 @@ export const useEditor = create<EditorState>((set, get) => ({
     });
   },
 
-  addSegmentForAsset: (assetId) => {
+  addSegmentForAsset: (assetId, opts) => {
     get().record();
     set((s) => {
       const a = s.assets[assetId];
       if (!a) return s;
+      const lane = a.kind === "audio" ? (opts?.lane ?? 0) : 0;
       const seg: Segment = {
         id: segId(),
         clipId: a.id,
         track: a.kind,
+        ...(a.kind === "audio" && lane > 0 ? { lane } : {}),
         in: 0,
         out: a.duration,
-        start: trackDuration(s.segments, a.kind), // append at the track's current end
+        // explicit start, else append at this track/lane's current end
+        start: opts?.start ?? trackDuration(s.segments, a.kind, lane),
       };
-      return { segments: [...s.segments, seg], selectedSegmentId: seg.id };
+      const audioLanes = a.kind === "audio" ? Math.max(s.audioLanes, lane + 1) : s.audioLanes;
+      return { segments: [...s.segments, seg], audioLanes, selectedSegmentId: seg.id };
+    });
+  },
+
+  addAudioLane: () => {
+    get().record();
+    set((s) => ({ audioLanes: s.audioLanes + 1 }));
+  },
+
+  // Place each separated stem on its own fresh audio lane (stacked), at t=0.
+  addAudioStems: (assetIds) => {
+    get().record();
+    set((s) => {
+      let lane = audioLaneCount(s.segments, s.audioLanes);
+      // If the only existing lane (A1) is empty, start there instead of after it.
+      if (lane === 1 && !s.segments.some((g) => g.track === "audio")) lane = 0;
+      const newSegs: Segment[] = [];
+      let last = "";
+      for (const id of assetIds) {
+        const a = s.assets[id];
+        if (!a) continue;
+        const seg: Segment = {
+          id: segId(),
+          clipId: a.id,
+          track: "audio",
+          ...(lane > 0 ? { lane } : {}),
+          in: 0,
+          out: a.duration,
+          start: 0,
+        };
+        newSegs.push(seg);
+        last = seg.id;
+        lane++;
+      }
+      if (!newSegs.length) return s;
+      return {
+        segments: [...s.segments, ...newSegs],
+        audioLanes: Math.max(s.audioLanes, lane),
+        selectedSegmentId: last,
+      };
     });
   },
 
@@ -624,6 +746,41 @@ export const useEditor = create<EditorState>((set, get) => ({
     }
     set({ previewAutoplay: v });
   },
+
+  setPanelSize: (patch) =>
+    set((s) => {
+      const next = { ...s.panelSizes, ...clampPanel(patch) };
+      saveJSON("vg:panelSizes", next);
+      return { panelSizes: next };
+    }),
+  resetPanelSizes: () => {
+    saveJSON("vg:panelSizes", DEFAULT_PANEL_SIZES);
+    set({ panelSizes: { ...DEFAULT_PANEL_SIZES } });
+  },
+  savePanelPreset: (name) =>
+    set((s) => {
+      const key = name.trim();
+      if (!key) return s;
+      const presets = { ...s.panelPresets, [key]: { ...s.panelSizes } };
+      saveJSON("vg:panelPresets", presets);
+      return { panelPresets: presets };
+    }),
+  loadPanelPreset: (name) =>
+    set((s) => {
+      const preset = s.panelPresets[name];
+      if (!preset) return s;
+      const next = { ...DEFAULT_PANEL_SIZES, ...clampPanel(preset) };
+      saveJSON("vg:panelSizes", next);
+      return { panelSizes: next };
+    }),
+  deletePanelPreset: (name) =>
+    set((s) => {
+      if (!(name in s.panelPresets)) return s;
+      const presets = { ...s.panelPresets };
+      delete presets[name];
+      saveJSON("vg:panelPresets", presets);
+      return { panelPresets: presets };
+    }),
 
   splitAtPlayhead: () => {
     const { segments, playhead: t } = get();

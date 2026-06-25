@@ -139,6 +139,7 @@ export interface EdlSegment {
   src: string; // absolute path to source media
   in: number; // seconds
   out: number; // seconds
+  start?: number; // absolute timeline position (audio mixing across lanes)
   speed?: number; // playback speed (1 = normal)
   volume?: number; // gain multiplier (1 = normal)
   muted?: boolean; // silence this segment's audio
@@ -519,33 +520,61 @@ export async function render(
   await rm(tmpDir, { recursive: true, force: true });
 }
 
-// Concatenate an audio-track EDL into one m4a (segments laid end-to-end).
+// Build the output audio from an EDL of audio segments across one or more lanes.
+// Each segment is trimmed/faded/gained, then positioned at its absolute timeline
+// `start` and mixed with all others (amix) — so overlapping lanes (e.g. separated
+// vocals + instrumental stems) sum together instead of replacing each other.
 async function buildAudioTrack(segs: EdlSegment[], tmpDir: string): Promise<string> {
-  const parts: string[] = [];
+  const out = join(tmpDir, "a1.m4a");
+  if (!segs.length) {
+    await run([
+      "ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+      "-t", "0.1", "-c:a", "aac", out,
+    ]);
+    return out;
+  }
+
+  // 1. Render each segment to a trimmed/faded/gained part.
+  const parts: { file: string; start: number }[] = [];
   for (let i = 0; i < segs.length; i++) {
     const s = segs[i];
-    const part = join(tmpDir, `a1_${String(i).padStart(3, "0")}.m4a`);
+    const part = join(tmpDir, `a_${String(i).padStart(3, "0")}.m4a`);
+    const speed = s.speed && s.speed > 0 ? s.speed : 1;
     const dur = Math.max(0.01, s.out - s.in);
+    const outDur = dur / speed;
     const af: string[] = [];
-    const fi = Math.min(s.fadeIn ?? 0, dur);
-    const fo = Math.min(s.fadeOut ?? 0, dur);
+    if (speed !== 1) af.push(atempoChain(speed));
+    const fi = Math.min(s.fadeIn ?? 0, outDur);
+    const fo = Math.min(s.fadeOut ?? 0, outDur);
     if (fi > 0) af.push(`afade=t=in:st=0:d=${fi}`);
-    if (fo > 0) af.push(`afade=t=out:st=${Math.max(0, dur - fo)}:d=${fo}`);
+    if (fo > 0) af.push(`afade=t=out:st=${Math.max(0, outDur - fo)}:d=${fo}`);
     if (s.muted) af.push("volume=0");
+    else if (s.volume != null && s.volume !== 1) af.push(`volume=${s.volume}`);
     const args = ["ffmpeg", "-y", "-ss", String(s.in), "-i", s.src, "-t", String(dur), "-vn"];
     if (af.length) args.push("-af", af.join(","));
     args.push("-c:a", "aac", "-b:a", "192k", part);
     const { code, stderr } = await run(args);
     if (code !== 0) throw new Error(`audio track segment ${i} failed: ` + stderr.slice(-200));
-    parts.push(part);
+    parts.push({ file: part, start: Math.max(0, s.start ?? 0) });
   }
-  const listFile = join(tmpDir, "a1.txt");
-  await writeFile(listFile, parts.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n"));
-  const out = join(tmpDir, "a1.m4a");
+
+  // 2. Delay each part to its timeline offset and mix them all together.
+  const inputs: string[] = [];
+  const fc: string[] = [];
+  const labels: string[] = [];
+  parts.forEach((p, i) => {
+    inputs.push("-i", p.file);
+    const ms = Math.round(p.start * 1000);
+    fc.push(`[${i}:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=${ms}:all=1[d${i}]`);
+    labels.push(`[d${i}]`);
+  });
+  fc.push(`${labels.join("")}amix=inputs=${parts.length}:normalize=0:dropout_transition=0[mix]`);
   const { code, stderr } = await run([
-    "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", out,
+    "ffmpeg", "-y", ...inputs,
+    "-filter_complex", fc.join(";"),
+    "-map", "[mix]", "-c:a", "aac", "-b:a", "192k", out,
   ]);
-  if (code !== 0) throw new Error("audio track concat failed: " + stderr.slice(-200));
+  if (code !== 0) throw new Error("audio mix failed: " + stderr.slice(-300));
   return out;
 }
 

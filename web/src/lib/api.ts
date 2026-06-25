@@ -70,7 +70,7 @@ export async function separateAudio(
   return res.json();
 }
 
-export type SeparateEngine = "demucs" | "spleeter";
+export type SeparateEngine = "demucs" | "audio-separator";
 
 // Kick off stem separation (returns a jobId; poll getJob, read job.clips on done).
 export async function separateStems(
@@ -91,6 +91,7 @@ export interface ExportEdlItem {
   clipId: string;
   in: number;
   out: number;
+  start?: number; // absolute timeline position (audio lanes: used for mixing)
   speed?: number;
   volume?: number;
   muted?: boolean;
@@ -256,14 +257,14 @@ export interface CaptionLine {
 export interface Capabilities {
   transcribe: boolean;
   translate: boolean;
-  separate: { demucs: boolean; spleeter: boolean };
+  separate: { demucs: boolean; "audio-separator": boolean };
 }
 
 export async function getCapabilities(): Promise<Capabilities> {
   const fallback: Capabilities = {
     transcribe: false,
     translate: false,
-    separate: { demucs: false, spleeter: false },
+    separate: { demucs: false, "audio-separator": false },
   };
   try {
     const res = await apiFetch("/api/capabilities");

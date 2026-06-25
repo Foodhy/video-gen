@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useEditor, placeTrack, placeCaptions } from "../state/editor.ts";
+import { useEditor, placeTrack, placeCaptions, audioLaneCount } from "../state/editor.ts";
 import { startExport, getJob, type JobState } from "../lib/api.ts";
 
 export default function ExportModal({ onClose }: { onClose: () => void }) {
@@ -70,17 +70,25 @@ export default function ExportModal({ onClose }: { onClose: () => void }) {
       ox2: p.ox2,
       oy2: p.oy2,
     }));
+    // All audio lanes (A1/A2/A3…) flattened; each item carries its absolute
+    // timeline `start` so the server can mix overlapping lanes (amix by offset).
     const a1Off = !!trackMuted.audio || !!trackHidden.audio;
-    const audioTrack = (a1Off ? [] : placeTrack(segments, "audio")).map((p) => ({
-      clipId: p.clipId,
-      in: p.in,
-      out: p.out,
-      speed: p.speed,
-      volume: p.volume,
-      muted: !!p.muted,
-      fadeIn: p.fadeIn,
-      fadeOut: p.fadeOut,
-    }));
+    const lanes = a1Off ? 0 : audioLaneCount(segments);
+    const audioTrack = Array.from({ length: lanes }, (_, lane) =>
+      placeTrack(segments, "audio", lane),
+    )
+      .flat()
+      .map((p) => ({
+        clipId: p.clipId,
+        in: p.in,
+        out: p.out,
+        start: p.start,
+        speed: p.speed,
+        volume: p.volume,
+        muted: !!p.muted,
+        fadeIn: p.fadeIn,
+        fadeOut: p.fadeOut,
+      }));
     try {
       const jobId = await startExport(
         projectId,

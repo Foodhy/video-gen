@@ -14,6 +14,7 @@ import Details from "./components/Details.tsx";
 import Timeline from "./components/Timeline/Timeline.tsx";
 import ExportModal from "./components/ExportModal.tsx";
 import Console from "./components/Console.tsx";
+import ResizeHandles from "./components/ResizeHandles.tsx";
 import { logger } from "./lib/logger.ts";
 
 const LS_KEY = "video-gen:pid";
@@ -26,6 +27,15 @@ export default function App() {
   const splitAtPlayhead = useEditor((s) => s.splitAtPlayhead);
   const deleteSelected = useEditor((s) => s.deleteSelected);
   const toast = useEditor((s) => s.toast);
+  const panelSizes = useEditor((s) => s.panelSizes);
+
+  // Mirror resizable panel sizes into the layout CSS vars.
+  useEffect(() => {
+    const r = document.documentElement.style;
+    r.setProperty("--w-media", panelSizes.media + "px");
+    r.setProperty("--w-details", panelSizes.details + "px");
+    r.setProperty("--h-timeline", panelSizes.timeline + "px");
+  }, [panelSizes]);
 
   // Hydrate last project from localStorage on first load.
   useEffect(() => {
@@ -56,6 +66,7 @@ export default function App() {
           folderOf: doc.folderOf,
           trackHidden: doc.trackHidden,
           trackMuted: doc.trackMuted,
+          audioLanes: doc.audioLanes,
         });
         logger.success(
           "project",
@@ -152,6 +163,7 @@ export default function App() {
       <Player />
       <Details />
       <Timeline />
+      <ResizeHandles />
       <Console />
       {exporting && <ExportModal onClose={() => setExporting(false)} />}
       {toast && <div className={"toast" + (toast.err ? " err" : "")}>{toast.msg}</div>}

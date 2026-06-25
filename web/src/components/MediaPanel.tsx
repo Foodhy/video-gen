@@ -181,10 +181,14 @@ export default function MediaPanel() {
         }}
       >
         <input ref={fileRef} type="file" accept="video/*,audio/*" multiple hidden onChange={onPick} />
-        <button className="btn-import" onClick={() => fileRef.current?.click()}>
-          + Import Media
-          <span className="import-hint">or drop files here</span>
-        </button>
+        {/* Big dropzone only when the project is empty; afterwards import via
+            right-click (background menu) or the toolbar Import button. */}
+        {Object.keys(assets).length === 0 && (
+          <button className="btn-import" onClick={() => fileRef.current?.click()}>
+            + Import Media
+            <span className="import-hint">or drop files here</span>
+          </button>
+        )}
 
         {/* text components */}
         {textComponents.length > 0 && (

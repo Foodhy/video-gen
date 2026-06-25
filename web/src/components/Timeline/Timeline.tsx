@@ -6,6 +6,7 @@ import {
   placeTrack,
   buildSnapPoints,
   snapValue,
+  audioLaneCount,
   type PlacedSegment,
 } from "../../state/editor.ts";
 import { tc } from "../../lib/format.ts";
@@ -42,6 +43,8 @@ export default function Timeline() {
   const setSegmentStart = useEditor((s) => s.setSegmentStart);
   const addSegmentAt = useEditor((s) => s.addSegmentAt);
   const sendToTrack = useEditor((s) => s.sendToTrack);
+  const audioLanesCount = useEditor((s) => audioLaneCount(s.segments, s.audioLanes));
+  const addAudioLane = useEditor((s) => s.addAudioLane);
 
   const addTextChild = useEditor((s) => s.addTextChild);
 
@@ -173,6 +176,8 @@ export default function Timeline() {
       { label: "Split clip at playhead", hint: "S", onClick: () => splitAtPlayhead() },
       { label: "Add text overlay here", onClick: () => addText() },
       { separator: true, label: "" },
+      { label: "➕ Add audio track (lane)", onClick: () => addAudioLane() },
+      { separator: true, label: "" },
       { label: "Select all clips", disabled: !allIds.length, onClick: () => setSelection(allIds) },
       { label: "Clear selection", disabled: selCount === 0, onClick: () => setSelection([]) },
       { separator: true, label: "" },
@@ -239,10 +244,13 @@ export default function Timeline() {
     useEditor.getState().setPreview(null); // interacting with the timeline exits preview
   }
 
-  // Mouse-wheel over the timeline zooms (scales), keeping the time under the cursor fixed.
+  // Mouse-wheel over the timeline: plain wheel scrolls; hold Ctrl/Cmd/Alt to zoom
+  // (scales), keeping the time under the cursor fixed.
   function onWheelZoom(e: React.WheelEvent) {
     const el = scrollRef.current;
-    if (!el || e.deltaY === 0) return;
+    if (!el) return;
+    const zoomMod = e.ctrlKey || e.metaKey || e.altKey;
+    if (!zoomMod || e.deltaY === 0) return; // no modifier → let the browser scroll
     e.preventDefault();
     const rect = el.getBoundingClientRect();
     const cursorContentX = e.clientX - rect.left + el.scrollLeft;
@@ -421,13 +429,13 @@ export default function Timeline() {
         </span>
         <div className="tl-zoom">
           <span className="label">Zoom</span>
-          <button className="tl-btn" onClick={() => setZoom(pxPerSec / 1.25)} title="Zoom out (wheel)">
+          <button className="tl-btn" onClick={() => setZoom(pxPerSec / 1.25)} title="Zoom out (Ctrl/Cmd/Alt+wheel)">
             −
           </button>
           <span className="mono" style={{ fontSize: 10, color: "var(--text-1)", minWidth: 34, textAlign: "center" }}>
             {Math.round(pxPerSec)}px
           </span>
-          <button className="tl-btn" onClick={() => setZoom(pxPerSec * 1.25)} title="Zoom in (wheel)">
+          <button className="tl-btn" onClick={() => setZoom(pxPerSec * 1.25)} title="Zoom in (Ctrl/Cmd/Alt+wheel)">
             +
           </button>
         </div>
@@ -467,12 +475,16 @@ export default function Timeline() {
             onMove={moveClip}
             snapPoints={snapPoints}
           />
-          <Track
-            kind="audio"
-            onClipContext={(seg, x, y) => setMenu({ x, y, seg })}
-            onMove={moveClip}
-            snapPoints={snapPoints}
-          />
+          {Array.from({ length: audioLanesCount }, (_, lane) => (
+            <Track
+              key={"audio-" + lane}
+              kind="audio"
+              lane={lane}
+              onClipContext={(seg, x, y) => setMenu({ x, y, seg })}
+              onMove={moveClip}
+              snapPoints={snapPoints}
+            />
+          ))}
 
           {placedCaps.length > 0 && (
             <div className="tl-track caption">

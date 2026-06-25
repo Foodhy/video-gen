@@ -13,7 +13,7 @@ import {
 import { createJob, getJob, updateJob } from "./jobs.ts";
 import { transcribe, modelAvailable } from "./transcribe.ts";
 import { translateLines, translateAvailable } from "./translate.ts";
-import { separateStems, separateCapabilities, STEMS, type Engine } from "./separate.ts";
+import { separateStems, separateCapabilities, type Engine } from "./separate.ts";
 
 const PORT = Number(process.env.PORT ?? 8787);
 const json = (data: unknown, status = 200) =>
@@ -296,7 +296,7 @@ async function handleSeparateStems(req: Request): Promise<Response> {
     clipId: string;
     engine: Engine;
   };
-  if (engine !== "demucs" && engine !== "spleeter") return bad("unknown engine");
+  if (engine !== "demucs" && engine !== "audio-separator") return bad("unknown engine");
   if (!separateCapabilities()[engine]) return bad(`${engine} not installed`, 503);
 
   const project = await loadProject(projectId);
@@ -316,12 +316,13 @@ async function handleSeparateStems(req: Request): Promise<Response> {
       const stems = await separateStems(srcAbs, work, engine);
       await mkdir(derivedDir(projectId), { recursive: true });
       const clips: (ClipMeta & { mediaUrl: string })[] = [];
+      const entries = Object.entries(stems);
       let done = 0;
-      for (const stem of STEMS) {
+      for (const [stem, wav] of entries) {
         const audioId = newClipId();
         const fileName = `${audioId}_${baseName}-${stem}.m4a`;
         const outAbs = join(derivedDir(projectId), fileName);
-        await extractAudio(stems[stem], outAbs); // wav → aac m4a
+        await extractAudio(wav, outAbs); // wav → aac m4a
         const meta = await probe(outAbs);
         const clip: ClipMeta = {
           id: audioId,
@@ -335,7 +336,7 @@ async function handleSeparateStems(req: Request): Promise<Response> {
         };
         project.clips.push(clip);
         clips.push({ ...clip, mediaUrl: `/media/${projectId}/${clip.file}` });
-        updateJob(job.id, { progress: ++done / STEMS.length });
+        updateJob(job.id, { progress: ++done / entries.length });
       }
       await saveProject(project);
       updateJob(job.id, { status: "done", progress: 1, clips });
@@ -407,6 +408,7 @@ interface ExportBody {
     clipId: string;
     in: number;
     out: number;
+    start?: number;
     speed?: number;
     volume?: number;
     muted?: boolean;
@@ -467,6 +469,7 @@ async function handleExport(req: Request): Promise<Response> {
       src: resolveMedia(projectId, clip.file)!,
       in: a.in,
       out: a.out,
+      start: a.start,
       speed: a.speed,
       volume: a.volume,
       muted: a.muted,

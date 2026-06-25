@@ -1,27 +1,25 @@
 import { join, basename } from "node:path";
 import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readdir } from "node:fs/promises";
 
-// Offline audio source separation (split a mix into stems: voice / drums /
-// bass / other). Multiple selectable engines, run through the project venv —
-// same "optional offline feature that degrades gracefully" pattern as
-// transcribe.ts (whisper) and translate.ts (argos).
+// Offline audio source separation (split a mix into stems). Multiple selectable
+// engines, run through the project venv — same "optional offline feature that
+// degrades gracefully" pattern as transcribe.ts (whisper) and translate.ts.
 //
-//   demucs   — Meta htdemucs (PyTorch). Best quality. Model downloads on first
-//              run to ~/.cache/torch.
-//   spleeter — Deezer (TensorFlow). Lighter / faster, lower quality.
+//   demucs          — Meta htdemucs (PyTorch). 4 stems: vocals/drums/bass/other.
+//                     Best for musical material. Model downloads on first run.
+//   audio-separator — UVR/MDX (onnxruntime). 2 stems: vocals/instrumental.
+//                     Best for isolating voice from everything else (SFX+music).
 //
-// Both produce the same 4 stems but in different output sub-folders; we
-// normalize that here.
+// Each engine produces a different set of stems in a different output layout;
+// separateStems() normalizes both to a { stemName -> wavPath } map.
 
 const ROOT = join(import.meta.dir, "..");
 const VENV_BIN = join(ROOT, ".venv", "bin");
 const PY = process.env.SEPARATE_PYTHON ??
   (existsSync(join(VENV_BIN, "python")) ? join(VENV_BIN, "python") : "python3");
 
-export type Engine = "demucs" | "spleeter";
-export const STEMS = ["vocals", "drums", "bass", "other"] as const;
-export type Stem = (typeof STEMS)[number];
+export type Engine = "demucs" | "audio-separator";
 
 function binPath(name: string): string | null {
   const p = join(VENV_BIN, name);
@@ -30,7 +28,7 @@ function binPath(name: string): string | null {
 
 // Each engine ships a console script in the venv when pip-installed.
 export function separateCapabilities(): Record<Engine, boolean> {
-  return { demucs: !!binPath("demucs"), spleeter: !!binPath("spleeter") };
+  return { demucs: !!binPath("demucs"), "audio-separator": !!binPath("audio-separator") };
 }
 
 async function runTool(cmd: string[]): Promise<void> {
@@ -40,33 +38,43 @@ async function runTool(cmd: string[]): Promise<void> {
   if (code !== 0) throw new Error(`${basename(cmd[0])} failed: ` + stderr.slice(-500));
 }
 
-// Separate `input` into the 4 stems. Returns absolute paths to the stem WAVs.
+// Separate `input` into stems. Returns { stemName -> absolute wav path }.
+// demucs → vocals/drums/bass/other; audio-separator → vocals/instrumental.
 export async function separateStems(
   input: string,
   outDir: string,
   engine: Engine,
-): Promise<Record<Stem, string>> {
+): Promise<Record<string, string>> {
   await mkdir(outDir, { recursive: true });
   const base = basename(input).replace(/\.[^.]+$/, "");
-  let stemDir: string;
+  const result: Record<string, string> = {};
 
   if (engine === "demucs") {
     const bin = binPath("demucs");
     const cmd = bin ? [bin] : [PY, "-m", "demucs"];
     cmd.push("-n", "htdemucs", "-o", outDir, input);
     await runTool(cmd);
-    stemDir = join(outDir, "htdemucs", base); // outDir/htdemucs/<base>/<stem>.wav
+    const stemDir = join(outDir, "htdemucs", base); // outDir/htdemucs/<base>/<stem>.wav
+    for (const stem of ["vocals", "drums", "bass", "other"]) {
+      const wav = join(stemDir, stem + ".wav");
+      if (existsSync(wav)) result[stem] = wav;
+    }
   } else {
-    const bin = binPath("spleeter") ?? "spleeter";
-    await runTool([bin, "separate", "-p", "spleeter:4stems", "-o", outDir, input]);
-    stemDir = join(outDir, base); // outDir/<base>/<stem>.wav
+    const bin = binPath("audio-separator") ?? "audio-separator";
+    // Default roformer model → two files named "<base>_(Vocals)_<model>.wav" etc.
+    await runTool([bin, input, "--output_dir", outDir, "--output_format", "WAV"]);
+    for (const f of await readdir(outDir)) {
+      const low = f.toLowerCase();
+      if (!low.endsWith(".wav")) continue;
+      const stem = low.includes("vocal")
+        ? "vocals"
+        : low.includes("instrument") || low.includes("no_vocal")
+          ? "instrumental"
+          : null;
+      if (stem && !result[stem]) result[stem] = join(outDir, f);
+    }
   }
 
-  const result = {} as Record<Stem, string>;
-  for (const stem of STEMS) {
-    const wav = join(stemDir, stem + ".wav");
-    if (!existsSync(wav)) throw new Error(`${engine} produced no ${stem} stem`);
-    result[stem] = wav;
-  }
+  if (!Object.keys(result).length) throw new Error(`${engine} produced no stems`);
   return result;
 }

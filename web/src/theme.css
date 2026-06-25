@@ -21,8 +21,11 @@
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
   --h-toolbar: 52px;
-  --h-timeline: 280px;
+  --h-timeline: 400px;
   --w-side: 280px;
+  /* Resizable panels (overridden at runtime from the store; see App.tsx). */
+  --w-media: 280px;
+  --w-details: 280px;
 
   color-scheme: dark;
 }
@@ -110,12 +113,48 @@ body {
   display: grid;
   height: 100vh;
   grid-template-rows: var(--h-toolbar) 1fr var(--h-timeline);
-  grid-template-columns: var(--w-side) 1fr var(--w-side);
+  grid-template-columns: var(--w-media) 1fr var(--w-details);
   grid-template-areas:
     "toolbar toolbar toolbar"
     "media   player  details"
     "timeline timeline timeline";
   background: var(--bg-0);
+}
+
+/* ---------- resizable panel drag handles ---------- */
+.resize-bar {
+  position: fixed;
+  z-index: 60;
+  background: transparent;
+  transition: background 0.12s;
+}
+.resize-bar.v {
+  top: var(--h-toolbar);
+  bottom: var(--h-timeline);
+  width: 7px;
+  cursor: col-resize;
+}
+.resize-bar.h {
+  left: 0;
+  right: 0;
+  height: 7px;
+  cursor: row-resize;
+}
+.resize-bar.media {
+  left: calc(var(--w-media) - 3px);
+}
+.resize-bar.details {
+  right: calc(var(--w-details) - 3px);
+}
+.resize-bar.timeline {
+  bottom: calc(var(--h-timeline) - 3px);
+}
+.resize-bar:hover,
+body.resizing .resize-bar {
+  background: var(--accent, #5a9cff);
+}
+body.resizing {
+  user-select: none;
 }
 
 /* ---------- toolbar ---------- */
@@ -975,6 +1014,20 @@ body {
   flex: 1;
   overflow: auto;
   position: relative;
+  scrollbar-width: auto; /* Firefox: wider bars */
+}
+/* Thicker, more grabbable scrollbars on the timeline. */
+.tl-scroll::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+.tl-scroll::-webkit-scrollbar-thumb {
+  background: var(--bg-3, #3a3a3a);
+  border: 3px solid var(--bg-1);
+  border-radius: 8px;
+}
+.tl-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-0);
 }
 .tl-inner {
   position: relative;

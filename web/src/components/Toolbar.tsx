@@ -24,6 +24,11 @@ export default function Toolbar({ onExport }: { onExport: () => void }) {
   const setPreviewAutoplay = useEditor((s) => s.setPreviewAutoplay);
   const recoverPlayer = useEditor((s) => s.recoverPlayer);
   const showToast = useEditor((s) => s.showToast);
+  const panelPresets = useEditor((s) => s.panelPresets);
+  const resetPanelSizes = useEditor((s) => s.resetPanelSizes);
+  const savePanelPreset = useEditor((s) => s.savePanelPreset);
+  const loadPanelPreset = useEditor((s) => s.loadPanelPreset);
+  const deletePanelPreset = useEditor((s) => s.deletePanelPreset);
   const [settings, setSettings] = useState<{ x: number; y: number } | null>(null);
   const [showAbout, setShowAbout] = useState(false);
   const hasVideo = timelineDuration(segments) > 0;
@@ -140,6 +145,41 @@ export default function Toolbar({ onExport }: { onExport: () => void }) {
               disabled: typeof document !== "undefined" && !document.fullscreenElement,
               onClick: () => document.exitFullscreen().catch(() => {}),
             },
+            { separator: true, label: "" },
+            {
+              label: "⬛ Reset panel layout",
+              onClick: () => {
+                resetPanelSizes();
+                showToast("Panel layout reset to default");
+              },
+            },
+            {
+              label: "💾 Save current layout as preset…",
+              onClick: () => {
+                const name = window.prompt("Preset name?")?.trim();
+                if (name) {
+                  savePanelPreset(name);
+                  showToast(`Saved layout preset “${name}”`);
+                }
+              },
+            },
+            ...Object.keys(panelPresets).flatMap((name) => [
+              {
+                label: `↦ Load layout “${name}”`,
+                onClick: () => {
+                  loadPanelPreset(name);
+                  showToast(`Loaded layout “${name}”`);
+                },
+              },
+              {
+                label: `🗑 Delete preset “${name}”`,
+                danger: true,
+                onClick: () => {
+                  deletePanelPreset(name);
+                  showToast(`Deleted preset “${name}”`);
+                },
+              },
+            ]),
             { separator: true, label: "" },
             {
               label: "ⓘ About VIDEO—GEN",
