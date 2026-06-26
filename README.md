@@ -1,5 +1,7 @@
 # VIDEO—GEN
 
+![VIDEO—GEN — editor de video local para Mac, estilo CapCut, 100% offline](./assets/hero.png)
+
 Local Mac video editor. CapCut-style layout, A24 "Dark Chrome Brutalist" skin. Fully local: a Bun server drives `ffmpeg` on native files; nothing leaves the machine.
 
 ## Requirements
